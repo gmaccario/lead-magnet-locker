@@ -1,0 +1,12 @@
+{
+  "name": "gmaccario/lead-magnet-locker",
+  "type": "wordpress-plugin",
+  "require": {
+    "php": ">=8.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "LeadMagnet\\Locker\\": "src/"
+    }
+  }
+}
