@@ -14,6 +14,8 @@ class LeadMagnetLockerPluginBootstrap {
 
     public function __construct(
         private readonly LeadMagnetLocker $plugin,
+        private readonly LeadMagnetLockerFileUploader $fileUploader,
+        private readonly LeadMagnetLockerDownloader $downloader,
     ) {
         
     }
@@ -55,7 +57,11 @@ class LeadMagnetLockerPluginBootstrap {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_scripts']);
         add_action('wp_ajax_submit_email', [$this->plugin, 'handle_email_submission']);
         add_action('wp_ajax_nopriv_submit_email', [$this->plugin, 'handle_email_submission']);
-        add_action('init', [$this->plugin, 'handle_download']);
+        add_action('init', [$this->downloader, 'handle_download']);
+
+        // AJAX handlers for file management
+        add_action('wp_ajax_lead_magnet_upload_file', [$this->fileUploader, 'ajax_upload_file']);
+        add_action('wp_ajax_lead_magnet_delete_file', [$this->fileUploader, 'ajax_delete_file']);
 
         // Admin actions
         add_action('admin_menu', [$this, 'add_admin_menu']);
@@ -74,15 +80,24 @@ class LeadMagnetLockerPluginBootstrap {
      */
     public function admin_enqueue_scripts(string $hook): void
     {
-        if (!str_contains($hook, 'lead-magnet-locker')) {
+        if (!str_contains($hook, 'lead-magnet-locker') && !str_contains($hook, 'lead-magnet-history')) {
             return;
         }
 
-        wp_enqueue_script('jquery');
-        wp_localize_script('jquery', 'lead_magnet_admin_ajax', [
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('lead_magnet_admin_nonce'),
-            'confirm_delete' => 'Are you sure you want to delete this record?'
+        // Enqueue your custom admin script
+        wp_enqueue_script(
+            'lead-magnet-admin',
+            plugin_dir_url($this->main_file) . 'assets/js/admin.js', // create this file
+            ['jquery'],
+            '1.0',
+            true
+        );
+
+        // Localize to your script handle
+        wp_localize_script('lead-magnet-admin', 'lead_magnet_admin_ajax', [
+            'ajax_url'       => admin_url('admin-ajax.php'),
+            'nonce'          => wp_create_nonce('lead_magnet_admin_nonce'),
+            'confirm_delete' => __('Are you sure you want to delete this record?', 'myplugin'),
         ]);
     }
 

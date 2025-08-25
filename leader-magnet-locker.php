@@ -5,13 +5,22 @@
  * Description: Collect emails in exchange for secure digital downloads. Protect your files, grow your list, and deliver assets automatically.
  * Version: 1.1.0
  * Author: G. Maccario
+ * Author URI: https://www.giuseppemaccario.com/
+ * License: GPL2
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: lead-magnet-locker
+ *
+ * Requires PHP: 8.1
+ * Requires at least: 6.7
+ * Tested up to: 6.7.3
  */
 
 declare(strict_types=1);
 
 namespace LeadMagnetLocker;
 
+use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerDownloader;
+use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerFileUploader;
 use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerPluginBootstrap;
 
 // Prevent direct access
@@ -38,14 +47,23 @@ class LeadMagnetLocker {
     private string $download_table_name;
     private string $settings_table_name;
 
+    private LeadMagnetLockerFileUploader $fileUploader;
+    private LeadMagnetLockerDownloader $downloader;
+
     public function __construct() {
         global $wpdb;
 
         $this->download_table_name = $wpdb->prefix . 'lead_magnet_downloads';
         $this->settings_table_name = $wpdb->prefix . 'lead_magnet_settings';
 
+        $this->fileUploader = (new LeadMagnetLockerFileUploader())
+            ->setTablesName($this->download_table_name);
+
+        $this->downloader = (new LeadMagnetLockerDownloader())
+            ->setTablesName($this->download_table_name);
+
         // Hook into WordPress
-        (new LeadMagnetLockerPluginBootstrap($this))
+        (new LeadMagnetLockerPluginBootstrap($this, $this->fileUploader, $this->downloader))
                 ->setTablesName($this->download_table_name, $this->settings_table_name)
                 ->setMainFile(__FILE__)
                 ->hook_into_wp();
@@ -146,29 +164,42 @@ class LeadMagnetLocker {
     }
 
     /**
-     * Main admin page
+     * Enhanced admin page with file upload
      */
     public function admin_page(): void
     {
         global $wpdb;
 
+        // Handle file upload
+        $upload_message = '';
+        if (isset($_POST['upload_file']) && isset($_FILES['lead_magnet_file'])) {
+            $upload_result = $this->fileUploader->handle_file_upload();
+            $upload_message = $upload_result['message'];
+        }
+
+        // Handle file deletion
+        if (isset($_POST['delete_file']) && isset($_POST['file_to_delete'])) {
+            $delete_result = $this->fileUploader->handle_file_deletion($_POST['file_to_delete']);
+            $upload_message = $delete_result['message'];
+        }
+
         $total_downloads = $wpdb->get_var("SELECT COUNT(*) FROM $this->download_table_name");
         $unique_emails = $wpdb->get_var("SELECT COUNT(DISTINCT email) FROM $this->download_table_name");
         $completed_downloads = $wpdb->get_var("SELECT COUNT(*) FROM $this->download_table_name WHERE downloaded_at IS NOT NULL");
 
-        $upload_message = '';
+        // Get uploaded files
         $upload_dir = wp_upload_dir();
         $secure_dir = $upload_dir['basedir'] . '/lead-magnet-files/';
+        $files = [];
         if (is_dir($secure_dir)) {
-            $files = array_diff(scandir($secure_dir), ['.', '..', '.htaccess']);
-            if (!empty($files)) {
-                $upload_message = '<h3>Available Files:</h3><ul>';
-                foreach ($files as $file) {
-                    $upload_message .= '<li>' . esc_html($file) . '</li>';
-                }
-                $upload_message .= '</ul>';
-            } else {
-                $upload_message .= '<p><em>No files uploaded yet.</em></p>';
+            $all_files = array_diff(scandir($secure_dir), ['.', '..', '.htaccess']);
+            foreach ($all_files as $file) {
+                $file_path = $secure_dir . $file;
+                $files[] = [
+                    'name' => $file,
+                    'size' => $this->fileUploader->format_file_size(filesize($file_path)),
+                    'modified' => date('Y-m-d H:i:s', filemtime($file_path))
+                ];
             }
         }
 
@@ -196,6 +227,7 @@ class LeadMagnetLocker {
         $end_date = $this->get_setting('end_date');
         $start_time = $this->get_setting('start_time');
         $end_time = $this->get_setting('end_time');
+        $timezone = $this->get_setting('timezone');
 
         include_once('views/admin/settings-page.php');
     }
@@ -223,16 +255,33 @@ class LeadMagnetLocker {
         }
 
         // Get total count
-        $total_items = $wpdb->get_var($wpdb->prepare(
+        if (!empty($search_params)) {
+            $total_items = $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM $this->download_table_name" . $where_clause,
                 $search_params
-        ));
+            ));
+        } else {
+            $total_items = $wpdb->get_var(
+                "SELECT COUNT(*) FROM $this->download_table_name"
+            );
+        }
 
         // Get records
-        $records = $wpdb->get_results(query: $wpdb->prepare(
-                "SELECT * FROM $this->download_table_name" . $where_clause . " ORDER BY created_at DESC LIMIT %d OFFSET %d",
-                array_merge($search_params, [$per_page, $offset])
-        ));
+        if (!empty($search_params)) {
+            $records = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM $this->download_table_name" . $where_clause . " ORDER BY created_at DESC LIMIT %d OFFSET %d",
+                    array_merge($search_params, [$per_page, $offset])
+                )
+            );
+        } else {
+            $records = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM $this->download_table_name ORDER BY created_at DESC LIMIT %d OFFSET %d",
+                    $per_page, $offset
+                )
+            );
+        }
 
         $total_pages = ceil($total_items / $per_page);
 
@@ -334,86 +383,6 @@ class LeadMagnetLocker {
                 'message' => 'Success! Your download is ready.',
                 'download_url' => $download_url
         ]);
-    }
-
-    /**
-     * Handle secure file downloads
-     */
-    public function handle_download(): void
-    {
-        if (!isset($_GET['lead_magnet_download'])) {
-            return;
-        }
-
-        $download_key = sanitize_text_field($_GET['lead_magnet_download']);
-
-        // Get download record from a database
-        global $wpdb;
-        $record = $wpdb->get_row($wpdb->prepare(
-                "SELECT * FROM $this->download_table_name WHERE download_key = %s",
-                $download_key
-        ));
-
-        if (!$record) {
-            wp_die('Invalid download link.');
-        }
-
-        // Check if a file exists
-        $upload_dir = wp_upload_dir();
-        $file_path = $upload_dir['basedir'] . '/lead-magnet-files/' . $record->file_name;
-
-        if (!file_exists($file_path)) {
-            wp_die('File not found.');
-        }
-
-        // Update download timestamp
-        $wpdb->update(
-                $this->download_table_name,
-                ['downloaded_at' => current_time('mysql')],
-                ['id' => $record->id],
-                ['%s'],
-                ['%d']
-        );
-
-        // Serve the file
-        $file_info = pathinfo($file_path);
-        $mime_type = $this->get_mime_type($file_info['extension']);
-
-        header('Content-Type: ' . $mime_type);
-        header('Content-Disposition: attachment; filename="' . basename($file_path) . '"');
-        header('Content-Length: ' . filesize($file_path));
-        header('Cache-Control: no-cache, must-revalidate');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-
-        readfile($file_path);
-        exit;
-    }
-
-    /**
-     * Get MIME type based on file extension
-     */
-    private function get_mime_type($extension): string
-    {
-        $mime_types = [
-                'pdf' => 'application/pdf',
-                'zip' => 'application/zip',
-                'doc' => 'application/msword',
-                'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'xls' => 'application/vnd.ms-excel',
-                'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'ppt' => 'application/vnd.ms-powerpoint',
-                'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                'jpg' => 'image/jpeg',
-                'jpeg' => 'image/jpeg',
-                'png' => 'image/png',
-                'gif' => 'image/gif',
-                'txt' => 'text/plain',
-                'mp3' => 'audio/mpeg',
-                'mp4' => 'video/mp4'
-        ];
-
-        return $mime_types[strtolower($extension)] ?? 'application/octet-stream';
     }
 }
 
