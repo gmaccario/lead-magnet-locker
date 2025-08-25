@@ -6,7 +6,7 @@
  * Version: 1.1.0
  * Author: G. Maccario
  * Author URI: https://www.giuseppemaccario.com/
- * License: GPL2
+ * License: GPL2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: lead-magnet-locker
  *

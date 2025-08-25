@@ -94,7 +94,7 @@ class LeadMagnetLockerFileUploader
             return ['success' => false, 'message' => 'File too large. Maximum size: ' . $this->format_file_size($max_size)];
         }
 
-        // Create secure directory if it doesn't exist
+        // Create the secure directory if it doesn't exist
         $this->create_secure_directory();
 
         // Set destination
@@ -102,7 +102,7 @@ class LeadMagnetLockerFileUploader
         $secure_dir = $upload_dir['basedir'] . '/lead-magnet-files/';
         $destination = $secure_dir . $file_name;
 
-        // Check if file already exists
+        // Check if the file already exists
         if (file_exists($destination)) {
             // Generate unique filename
             $file_info = pathinfo($file_name);
@@ -122,7 +122,6 @@ class LeadMagnetLockerFileUploader
             return ['success' => false, 'message' => 'Failed to move uploaded file.'];
         }
     }
-
 
     /**
      * Handle file deletion
@@ -147,7 +146,7 @@ class LeadMagnetLockerFileUploader
             return ['success' => false, 'message' => 'File not found.'];
         }
 
-        // Check if file is being used in any downloads
+        // Check if the file is being used in any downloads
         global $wpdb;
         $usage_count = $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM $this->download_table_name WHERE file_name = %s",
@@ -160,9 +159,9 @@ class LeadMagnetLockerFileUploader
 
         if (unlink($file_path)) {
             return ['success' => true, 'message' => 'File deleted successfully: ' . $filename];
-        } else {
-            return ['success' => false, 'message' => 'Failed to delete file.'];
         }
+
+        return ['success' => false, 'message' => 'Failed to delete file.'];
     }
 
     /**

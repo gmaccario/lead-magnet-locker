@@ -17,7 +17,7 @@
 
 ###> symfony/asset-mapper ###
 /public/assets/
-/assets/vendor/
+/views/admin/assets/vendor/
 ###< symfony/asset-mapper ###
 
 ###> friendsofphp/php-cs-fixer ###

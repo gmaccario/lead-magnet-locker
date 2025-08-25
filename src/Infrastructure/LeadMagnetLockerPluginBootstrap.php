@@ -87,7 +87,7 @@ class LeadMagnetLockerPluginBootstrap {
         // Enqueue your custom admin script
         wp_enqueue_script(
             'lead-magnet-admin',
-            plugin_dir_url($this->main_file) . 'assets/js/admin.js', // create this file
+            plugin_dir_url($this->main_file) . 'views/admin/assets/js/admin.js', // create this file
             ['jquery'],
             '1.0',
             true
