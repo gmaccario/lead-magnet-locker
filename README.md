@@ -224,7 +224,7 @@ Lead Magnet Locker is designed with privacy in mind:
 ## Changelog
 
 ### Version 1.1.0
-* Added comprehensive admin dashboard
+* Added a comprehensive admin dashboard
 * Implemented date/time scheduling system
 * Enhanced download tracking and analytics
 * Improved security measures
@@ -241,10 +241,10 @@ Lead Magnet Locker is designed with privacy in mind:
 ## Upgrade Notice
 
 ### 1.1.0
-Major update with advanced scheduling features and comprehensive admin dashboard. Existing users will see significant improvements in functionality and user experience.
+Major update with advanced scheduling features and a comprehensive admin dashboard. 
 
 ## Credits
 
-Developed with love for the WordPress community by G. Maccario. Special thanks to all users who provided feedback and feature requests that shaped this plugin.
+Developed with love for the WordPress community by G.Maccario. Special thanks to all users who provided feedback and feature requests that shaped this plugin.
 
 Built on WordPress best practices and designed to integrate seamlessly with your existing workflow.
