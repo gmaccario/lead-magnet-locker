@@ -115,7 +115,7 @@ Make it your own with these parameters:
 
 === File Management ===
 * Supported file types: PDF, ZIP, Word, Excel, PowerPoint, JPG, PNG, GIF, TXT, MP3, MP4
-* Upload to `/wp-content/uploads/lead-magnet-files/` and reference filename in shortcode
+* Upload easily via the WordPress admin dashboard and reference filename in the shortcode
 
 === Campaign Scheduling ===
 * Enable "Date & Time Trigger" in **Lead Magnet > Settings**

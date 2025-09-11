@@ -83,10 +83,9 @@ Clean, responsive forms that match your site's design and convert visitors into 
 
 ### First Time Setup
 1. Navigate to **Lead Magnet** in your WordPress admin menu
-2. Create the folder `/wp-content/uploads/lead-magnet-files/`
-3. Upload your first digital asset to this folder
-4. Add your shortcode to any page or post
-5. Start collecting emails immediately
+2. Upload your first digital asset to this folder
+3. Add your shortcode to any page or post
+4. Start collecting emails immediately
 
 ## Usage
 
@@ -124,9 +123,9 @@ Make it your own with these parameters:
 * Video files (MP4)
 
 **Upload Process:**
-1. Access your site via FTP or cPanel File Manager
-2. Navigate to `/wp-content/uploads/lead-magnet-files/`
-3. Upload your files directly to this folder
+1. Access your WordPress admin dashboard
+2. Navigate to the plugin page and click on Lead Magnet Locker > Settings
+3. Upload your files directly via the file manager
 4. Reference the filename in your shortcode
 
 ### Campaign Scheduling

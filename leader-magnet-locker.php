@@ -316,7 +316,7 @@ class LeadMagnetLocker {
         $file_path = $upload_dir['basedir'] . '/lead-magnet-files/' . $atts['file'];
 
         if (!file_exists($file_path)) {
-            return '<p><strong>Error:</strong> File not found. Please upload the file to wp-content/uploads/lead-magnet-files/</p>';
+            return '<p><strong>Error:</strong> File not found. Please upload the file first from the WordPress admin dashboard</p>';
         }
 
         ob_start();
