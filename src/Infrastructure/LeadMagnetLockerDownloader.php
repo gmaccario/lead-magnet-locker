@@ -24,21 +24,12 @@ class LeadMagnetLockerDownloader
             return;
         }
 
-        // Verify nonce for security
-        if (!isset($_GET['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['nonce'])), 'lead_magnet_download')) {
-            wp_die('Security check failed.');
-        }
+        $download_key = sanitize_text_field($_GET['lead_magnet_download']);
 
-        // Properly unslash and sanitize the download key
-        $download_key = sanitize_text_field(wp_unslash($_GET['lead_magnet_download']));
-
-        // Get download record from the database with proper table name handling
+        // Get download record from a database
         global $wpdb;
-        $table_name = $wpdb->prefix . $this->download_table_name;
-        // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
-        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $record = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM `{$table_name}` WHERE download_key = %s",
+            "SELECT * FROM $this->download_table_name WHERE download_key = %s",
             $download_key
         ));
 
@@ -54,16 +45,16 @@ class LeadMagnetLockerDownloader
             wp_die('File not found.');
         }
 
-        // Update download timestamp with proper table name
+        // Update download timestamp
         $wpdb->update(
-            $table_name,
+            $this->download_table_name,
             ['downloaded_at' => current_time('mysql')],
             ['id' => $record->id],
             ['%s'],
             ['%d']
         );
 
-        // Serve the file - readfile() is appropriate for streaming downloads
+        // Serve the file
         $file_info = pathinfo($file_path);
         $mime_type = $this->get_mime_type($file_info['extension']);
 
