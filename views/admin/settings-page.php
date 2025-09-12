@@ -48,11 +48,7 @@
                         <?php
                         $timezones = timezone_identifiers_list();
                         foreach ($timezones as $tz) {
-                            $selected = (strpos( $tz, 'Rome') > 0)
-                                    ? 'selected="selected"'
-                                    : '';
-
-                            echo '<option ' . esc_attr($selected). ' value="' . esc_attr($tz) . '"' . selected($timezone, $tz, false) . '>' . esc_html($tz) . '</option>';
+                            echo '<option value="' . esc_attr($tz) . '"' . selected($timezone, $tz, false) . '>' . esc_html($tz) . '</option>';
                         }
                         ?>
                     </select>
