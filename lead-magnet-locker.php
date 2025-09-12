@@ -30,7 +30,10 @@ if (!defined('ABSPATH')) {
 
 // Include Composer autoloader if the autoload file exists
 if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
-    error_log('LeadMagnet - Autoloader file not found at: ' . __DIR__ . '/vendor/autoload.php');
+    // Only log in debug mode, not in production
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('LeadMagnet - Autoloader file not found at: ' . __DIR__ . '/vendor/autoload.php');
+    }
     return;
 }
 
@@ -38,7 +41,10 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 // Test if a class can be found
 if (!class_exists('\LeadMagnet\Locker\Infrastructure\LeadMagnetLockerPluginBootstrap')) {
-    error_log('LeadMagnet - Class NOT found by autoloader');
+    // Only log in debug mode, not in production
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('LeadMagnet - Class NOT found by autoloader');
+    }
     return;
 }
 
@@ -64,9 +70,9 @@ class LeadMagnetLocker {
 
         // Hook into WordPress
         (new LeadMagnetLockerPluginBootstrap($this, $this->fileUploader, $this->downloader))
-                ->setTablesName($this->download_table_name, $this->settings_table_name)
-                ->setMainFile(__FILE__)
-                ->hook_into_wp();
+            ->setTablesName($this->download_table_name, $this->settings_table_name)
+            ->setMainFile(__FILE__)
+            ->hook_into_wp();
     }
 
     /**
@@ -74,9 +80,11 @@ class LeadMagnetLocker {
      */
     private function get_setting($key, $default = '') {
         global $wpdb;
+        // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $value = $wpdb->get_var($wpdb->prepare(
-                "SELECT setting_value FROM $this->settings_table_name WHERE setting_key = %s",
-                $key
+            "SELECT setting_value FROM {$this->settings_table_name} WHERE setting_key = %s",
+            $key
         ));
         return $value !== null ? $value : $default;
     }
@@ -88,12 +96,12 @@ class LeadMagnetLocker {
     {
         global $wpdb;
         $wpdb->replace(
-                $this->settings_table_name,
-                [
-                        'setting_key' => $key,
-                        'setting_value' => $value
-                ],
-                ['%s', '%s']
+            $this->settings_table_name,
+            [
+                'setting_key' => $key,
+                'setting_value' => $value
+            ],
+            ['%s', '%s']
         );
     }
 
@@ -118,20 +126,13 @@ class LeadMagnetLocker {
             return true; // Show if dates are not set
         }
 
-        // Set timezone
-        $old_timezone = date_default_timezone_get();
-        date_default_timezone_set($timezone);
+        // Use WordPress timezone functions instead of PHP's date_default_timezone_set
+        $wp_timezone = new \DateTimeZone($timezone);
+        $now = new \DateTime(current_time('mysql'), $wp_timezone);
+        $start_datetime = new \DateTime($start_date . ' ' . $start_time . ':00', $wp_timezone);
+        $end_datetime = new \DateTime($end_date . ' ' . $end_time . ':59', $wp_timezone);
 
-        $now = current_time('Y-m-d H:i:s');
-        $start_datetime = $start_date . ' ' . $start_time . ':00';
-        $end_datetime = $end_date . ' ' . $end_time . ':59';
-
-        $is_visible = ($now >= $start_datetime && $now <= $end_datetime);
-
-        // Restore timezone
-        date_default_timezone_set($old_timezone);
-
-        return $is_visible;
+        return ($now >= $start_datetime && $now <= $end_datetime);
     }
 
     /**
@@ -139,7 +140,9 @@ class LeadMagnetLocker {
      */
     public function delete_download_record(): void
     {
-        if (!wp_verify_nonce($_POST['nonce'], 'lead_magnet_admin_nonce')) {
+        // Validate and sanitize nonce
+        $nonce = isset($_POST['nonce']) ? wp_unslash(sanitize_text_field($_POST['nonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'lead_magnet_admin_nonce')) {
             wp_send_json_error(['message' => 'Security check failed']);
         }
 
@@ -147,13 +150,17 @@ class LeadMagnetLocker {
             wp_send_json_error(['message' => 'Insufficient permissions']);
         }
 
-        $record_id = intval($_POST['record_id']);
+        // Validate and sanitize record_id
+        $record_id = isset($_POST['record_id']) ? intval($_POST['record_id']) : 0;
+        if ($record_id <= 0) {
+            wp_send_json_error(['message' => 'Invalid record ID']);
+        }
 
         global $wpdb;
         $result = $wpdb->delete(
-                $this->download_table_name,
-                ['id' => $record_id],
-                ['%d']
+            $this->download_table_name,
+            ['id' => $record_id],
+            ['%d']
         );
 
         if ($result === false) {
@@ -170,22 +177,32 @@ class LeadMagnetLocker {
     {
         global $wpdb;
 
-        // Handle file upload
+        // Handle file upload with nonce verification
         $upload_message = '';
-        if (isset($_POST['upload_file']) && isset($_FILES['lead_magnet_file'])) {
+        if (isset($_POST['upload_file']) && isset($_FILES['lead_magnet_file']) &&
+            check_admin_referer('lead_magnet_upload', 'upload_nonce')) {
             $upload_result = $this->fileUploader->handle_file_upload();
             $upload_message = $upload_result['message'];
         }
 
-        // Handle file deletion
-        if (isset($_POST['delete_file']) && isset($_POST['file_to_delete'])) {
-            $delete_result = $this->fileUploader->handle_file_deletion($_POST['file_to_delete']);
+        // Handle file deletion with nonce verification
+        if (isset($_POST['delete_file']) && isset($_POST['file_to_delete']) &&
+            check_admin_referer('lead_magnet_delete', 'delete_nonce')) {
+            $file_to_delete = wp_unslash(sanitize_file_name($_POST['file_to_delete']));
+            $delete_result = $this->fileUploader->handle_file_deletion($file_to_delete);
             $upload_message = $delete_result['message'];
         }
 
-        $total_downloads = $wpdb->get_var("SELECT COUNT(*) FROM $this->download_table_name");
-        $unique_emails = $wpdb->get_var("SELECT COUNT(DISTINCT email) FROM $this->download_table_name");
-        $completed_downloads = $wpdb->get_var("SELECT COUNT(*) FROM $this->download_table_name WHERE downloaded_at IS NOT NULL");
+        // Use prepared statements for database queries
+        // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $total_downloads = $wpdb->get_var("SELECT COUNT(*) FROM {$this->download_table_name}");
+        // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $unique_emails = $wpdb->get_var("SELECT COUNT(DISTINCT email) FROM {$this->download_table_name}");
+        // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $completed_downloads = $wpdb->get_var("SELECT COUNT(*) FROM {$this->download_table_name} WHERE downloaded_at IS NOT NULL");
 
         // Get uploaded files
         $upload_dir = wp_upload_dir();
@@ -198,7 +215,7 @@ class LeadMagnetLocker {
                 $files[] = [
                     'name' => $file,
                     'size' => $this->fileUploader->format_file_size(filesize($file_path)),
-                    'modified' => date('Y-m-d H:i:s', filemtime($file_path))
+                    'modified' => gmdate('Y-m-d H:i:s', filemtime($file_path)) // Use gmdate instead of date
                 ];
             }
         }
@@ -244,43 +261,47 @@ class LeadMagnetLocker {
         $page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
         $offset = ($page - 1) * $per_page;
 
-        // Search functionality
-        $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
-        $where_clause = '';
-        $search_params = [];
+        // Search functionality with proper validation and sanitization
+        $search = '';
+        if (isset($_GET['s']) && !empty($_GET['s'])) {
+            $search = wp_unslash(sanitize_text_field($_GET['s']));
+        }
+
+        // Build query with proper prepared statements
+        $table_name = $wpdb->prefix . 'lead_magnet_downloads';
 
         if (!empty($search)) {
-            $where_clause = " WHERE email LIKE %s OR file_name LIKE %s";
-            $search_params = ["%$search%", "%$search%"];
-        }
-
-        // Get total count
-        if (!empty($search_params)) {
+            // Get total count with search
+            // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $total_items = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM $this->download_table_name" . $where_clause,
-                $search_params
+                "SELECT COUNT(*) FROM {$table_name} WHERE email LIKE %s OR file_name LIKE %s",
+                "%{$search}%",
+                "%{$search}%"
+            ));
+
+            // Get records with search
+            $records = $wpdb->get_results($wpdb->prepare(
+            // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                "SELECT * FROM {$table_name} WHERE email LIKE %s OR file_name LIKE %s ORDER BY created_at DESC LIMIT %d OFFSET %d",
+                "%{$search}%",
+                "%{$search}%",
+                $per_page,
+                $offset
             ));
         } else {
-            $total_items = $wpdb->get_var(
-                "SELECT COUNT(*) FROM $this->download_table_name"
-            );
-        }
+            // Get total count without search
+            // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $total_items = $wpdb->get_var("SELECT COUNT(*) FROM {$table_name}");
 
-        // Get records
-        if (!empty($search_params)) {
-            $records = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT * FROM $this->download_table_name" . $where_clause . " ORDER BY created_at DESC LIMIT %d OFFSET %d",
-                    array_merge($search_params, [$per_page, $offset])
-                )
-            );
-        } else {
-            $records = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT * FROM $this->download_table_name ORDER BY created_at DESC LIMIT %d OFFSET %d",
-                    $per_page, $offset
-                )
-            );
+            // Get records without search
+            $records = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT %d OFFSET %d",
+                $per_page,
+                $offset
+            ));
         }
 
         $total_pages = ceil($total_items / $per_page);
@@ -297,14 +318,14 @@ class LeadMagnetLocker {
         // Check if the form should be visible based on date/time settings
         if (!$this->is_form_visible()) {
             $message = 'This download is currently unavailable.';
-            return '<div class="lead-magnet-unavailable" style="padding: 20px; border: 2px solid #ccc; border-radius: 8px; text-align: center; color: #666;">' . $message . '</div>';
+            return '<div class="lead-magnet-unavailable" style="padding: 20px; border: 2px solid #ccc; border-radius: 8px; text-align: center; color: #666;">' . esc_html($message) . '</div>';
         }
 
         $atts = shortcode_atts([
-                'file' => '',
-                'title' => 'Get Your Free Download',
-                'description' => 'Enter your email address to receive your free download.',
-                'button_text' => 'Get Download Link'
+            'file' => '',
+            'title' => 'Get Your Free Download',
+            'description' => 'Enter your email address to receive your free download.',
+            'button_text' => 'Get Download Link'
         ], $atts);
 
         if (empty($atts['file'])) {
@@ -331,8 +352,9 @@ class LeadMagnetLocker {
      */
     public function handle_email_submission(): void
     {
-        // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'lead_magnet_nonce')) {
+        // Verify nonce with proper validation and sanitization
+        $nonce = isset($_POST['nonce']) ? wp_unslash(sanitize_text_field($_POST['nonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'lead_magnet_nonce')) {
             wp_die('Security check failed');
         }
 
@@ -341,8 +363,9 @@ class LeadMagnetLocker {
             wp_send_json_error(['message' => 'This download is currently unavailable.']);
         }
 
-        $email = sanitize_email($_POST['email']);
-        $file = sanitize_file_name($_POST['file']);
+        // Validate and sanitize form inputs
+        $email = isset($_POST['email']) ? wp_unslash(sanitize_email($_POST['email'])) : '';
+        $file = isset($_POST['file']) ? wp_unslash(sanitize_file_name($_POST['file'])) : '';
 
         // Validate email
         if (!is_email($email)) {
@@ -363,13 +386,13 @@ class LeadMagnetLocker {
         // Save to a database
         global $wpdb;
         $result = $wpdb->insert(
-                $this->download_table_name,
-                [
-                        'email' => $email,
-                        'file_name' => $file,
-                        'download_key' => $download_key
-                ],
-                ['%s', '%s', '%s']
+            $this->download_table_name,
+            [
+                'email' => $email,
+                'file_name' => $file,
+                'download_key' => $download_key
+            ],
+            ['%s', '%s', '%s']
         );
 
         if ($result === false) {
@@ -380,8 +403,8 @@ class LeadMagnetLocker {
         $download_url = home_url('/?lead_magnet_download=' . $download_key);
 
         wp_send_json_success([
-                'message' => 'Success! Your download is ready.',
-                'download_url' => $download_url
+            'message' => 'Success! Your download is ready.',
+            'download_url' => $download_url
         ]);
     }
 }

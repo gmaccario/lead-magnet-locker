@@ -24,12 +24,21 @@ class LeadMagnetLockerDownloader
             return;
         }
 
-        $download_key = sanitize_text_field($_GET['lead_magnet_download']);
+        // Verify nonce for security
+        if (!isset($_GET['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['nonce'])), 'lead_magnet_download')) {
+            wp_die('Security check failed.');
+        }
 
-        // Get download record from a database
+        // Properly unslash and sanitize the download key
+        $download_key = sanitize_text_field(wp_unslash($_GET['lead_magnet_download']));
+
+        // Get download record from the database with proper table name handling
         global $wpdb;
+        $table_name = $wpdb->prefix . $this->download_table_name;
+        // Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $record = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $this->download_table_name WHERE download_key = %s",
+            "SELECT * FROM `{$table_name}` WHERE download_key = %s",
             $download_key
         ));
 
@@ -45,16 +54,16 @@ class LeadMagnetLockerDownloader
             wp_die('File not found.');
         }
 
-        // Update download timestamp
+        // Update download timestamp with proper table name
         $wpdb->update(
-            $this->download_table_name,
+            $table_name,
             ['downloaded_at' => current_time('mysql')],
             ['id' => $record->id],
             ['%s'],
             ['%d']
         );
 
-        // Serve the file
+        // Serve the file - readfile() is appropriate for streaming downloads
         $file_info = pathinfo($file_path);
         $mime_type = $this->get_mime_type($file_info['extension']);
 
@@ -65,6 +74,9 @@ class LeadMagnetLockerDownloader
         header('Pragma: no-cache');
         header('Expires: 0');
 
+        // readfile() streams the file directly without loading into memory
+        // and doesn't require escaping as it's not HTML output
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
         readfile($file_path);
         exit;
     }

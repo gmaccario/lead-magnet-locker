@@ -48,7 +48,11 @@
                         <?php
                         $timezones = timezone_identifiers_list();
                         foreach ($timezones as $tz) {
-                            echo '<option value="' . esc_attr($tz) . '"' . selected($timezone, $tz, false) . '>' . esc_html($tz) . '</option>';
+                            $selected = (strpos( $tz, 'Rome') > 0)
+                                    ? 'selected="selected"'
+                                    : '';
+
+                            echo '<option ' . esc_attr($selected). ' value="' . esc_attr($tz) . '"' . selected($timezone, $tz, false) . '>' . esc_html($tz) . '</option>';
                         }
                         ?>
                     </select>
@@ -65,7 +69,12 @@
                 <p style="color: red;"><strong>✗ Forms are currently HIDDEN</strong></p>
             <?php endif; ?>
 
-            <p><strong>Current Server Time:</strong> <?php echo current_time('Y-m-d H:i:s'); ?> (<?php echo get_option('timezone_string', 'UTC'); ?>)</p>
+            <p><strong>Current Server Time:</strong> <?php echo esc_attr(current_time('Y-m-d H:i:s')); ?>
+                <?php echo (get_option('timezone_string', 'UTC'))
+                        ? '(' . esc_attr(get_option('timezone_string', 'UTC')) . ')'
+                        : '';
+                ?>
+            </p>
         </div>
 
         <?php submit_button(); ?>

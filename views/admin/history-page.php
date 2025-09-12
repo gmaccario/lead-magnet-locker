@@ -30,14 +30,14 @@
             </tr>
         <?php else: ?>
             <?php foreach ($records as $record): ?>
-                <tr id="record-<?php echo $record->id; ?>">
-                    <td><?php echo $record->id; ?></td>
+                <tr id="record-<?php echo esc_attr($record->id); ?>">
+                    <td><?php echo esc_html($record->id); ?></td>
                     <td><?php echo esc_html($record->email); ?></td>
                     <td><?php echo esc_html($record->file_name); ?></td>
-                    <td><?php echo mysql2date('Y-m-d H:i:s', $record->created_at); ?></td>
+                    <td><?php echo esc_html(mysql2date('Y-m-d H:i:s', $record->created_at)); ?></td>
                     <td>
                         <?php if ($record->downloaded_at): ?>
-                            <?php echo mysql2date('Y-m-d H:i:s', $record->downloaded_at); ?>
+                            <?php echo esc_html(mysql2date('Y-m-d H:i:s', $record->downloaded_at)); ?>
                         <?php else: ?>
                             <em>Not downloaded</em>
                         <?php endif; ?>
@@ -50,8 +50,8 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <button class="button-secondary delete-record" data-id="<?php echo $record->id; ?>">Delete</button>
-                        <a href="<?php echo home_url('/?lead_magnet_download=' . $record->download_key); ?>" target="_blank" class="button-secondary">Download Link</a>
+                        <button class="button-secondary delete-record" data-id="<?php echo esc_attr($record->id); ?>">Delete</button>
+                        <a href="<?php echo esc_attr(home_url('/?lead_magnet_download=' . esc_attr($record->download_key))); ?>" target="_blank" class="button-secondary">Download Link</a>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -62,7 +62,7 @@
     <?php if ($total_pages > 1): ?>
         <div class="tablenav bottom">
             <div class="tablenav-pages">
-                <span class="displaying-num"><?php echo $total_items; ?> items</span>
+                <span class="displaying-num"><?php echo esc_html($total_items); ?> items</span>
                 <?php
                 $base_url = admin_url('admin.php?page=lead-magnet-history');
                 if (!empty($search)) {
@@ -70,15 +70,15 @@
                 }
 
                 if ($page > 1): ?>
-                    <a class="button" href="<?php echo $base_url . '&paged=' . ($page - 1); ?>">&laquo; Previous</a>
+                    <a class="button" href="<?php echo esc_attr($base_url) . '&paged=' . esc_attr($page - 1); ?>">&laquo; Previous</a>
                 <?php endif; ?>
 
                 <span class="paging-input">
-                            Page <?php echo $page; ?> of <?php echo $total_pages; ?>
+                            Page <?php echo esc_html($page); ?> of <?php echo esc_html($total_pages); ?>
                         </span>
 
                 <?php if ($page < $total_pages): ?>
-                    <a class="button" href="<?php echo $base_url . '&paged=' . ($page + 1); ?>">Next &raquo;</a>
+                    <a class="button" href="<?php echo esc_attr($base_url) . '&paged=' . esc_attr($page + 1); ?>">Next &raquo;</a>
                 <?php endif; ?>
             </div>
         </div>

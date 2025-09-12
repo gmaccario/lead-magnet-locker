@@ -97,7 +97,7 @@ class LeadMagnetLockerPluginBootstrap {
         wp_localize_script('lead-magnet-admin', 'lead_magnet_admin_ajax', [
             'ajax_url'       => admin_url('admin-ajax.php'),
             'nonce'          => wp_create_nonce('lead_magnet_admin_nonce'),
-            'confirm_delete' => __('Are you sure you want to delete this record?', 'myplugin'),
+            'confirm_delete' => __('Are you sure you want to delete this record?', 'lead-magnet-locker'),
         ]);
     }
 
@@ -106,8 +106,24 @@ class LeadMagnetLockerPluginBootstrap {
      */
     public function admin_init(): void
     {
-        register_setting('lead_magnet_settings', 'lead_magnet_options');
+        register_setting(
+            'lead_magnet_settings',
+            'lead_magnet_options',
+            [
+                'type'              => 'array',
+                'sanitize_callback' => [$this, 'sanitize_options'],
+                'default'           => [
+                    'enable_date_trigger' => '0',
+                    'start_date'          => '',
+                    'end_date'            => '',
+                    'start_time'          => '00:00',
+                    'end_time'            => '23:59',
+                    'timezone'            => get_option('timezone_string', 'UTC'),
+                ],
+            ]
+        );
     }
+
 
     /**
      * Add admin menu

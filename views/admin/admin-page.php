@@ -54,7 +54,7 @@
                         <input type="file" name="lead_magnet_file" id="lead_magnet_file" accept=".pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.mp3,.mp4">
                         <p class="description">
                             Allowed file types: PDF, ZIP, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG, GIF, TXT, MP3, MP4<br>
-                            Maximum file size: <?php echo $this->fileUploader->format_file_size(wp_max_upload_size()); ?>
+                            Maximum file size: <?php echo esc_html($this->fileUploader->format_file_size(wp_max_upload_size())); ?>
                         </p>
                     </td>
                 </tr>
@@ -136,19 +136,21 @@
         <h2>Statistics</h2>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
             <div style="text-align: center; padding: 20px; background: #f0f6fc; border-radius: 5px;">
-                <h3 style="margin: 0; color: #0073aa;"><?php echo $total_downloads; ?></h3>
+                <h3 style="margin: 0; color: #0073aa;"><?php echo esc_html($total_downloads); ?></h3>
                 <p style="margin: 5px 0 0 0;">Total Submissions</p>
             </div>
             <div style="text-align: center; padding: 20px; background: #f0f6fc; border-radius: 5px;">
-                <h3 style="margin: 0; color: #0073aa;"><?php echo $unique_emails; ?></h3>
+                <h3 style="margin: 0; color: #0073aa;"><?php echo esc_html($unique_emails); ?></h3>
                 <p style="margin: 5px 0 0 0;">Unique Emails</p>
             </div>
             <div style="text-align: center; padding: 20px; background: #f0f6fc; border-radius: 5px;">
-                <h3 style="margin: 0; color: #0073aa;"><?php echo $completed_downloads; ?></h3>
+                <h3 style="margin: 0; color: #0073aa;"><?php echo esc_html($completed_downloads); ?></h3>
                 <p style="margin: 5px 0 0 0;">Completed Downloads</p>
             </div>
             <div style="text-align: center; padding: 20px; background: #f0f6fc; border-radius: 5px;">
-                <h3 style="margin: 0; color: #0073aa;"><?php echo $total_downloads > 0 ? round(($completed_downloads / $total_downloads) * 100, 2) . '%' : '0%'; ?></h3>
+                <h3 style="margin: 0; color: #0073aa;"><?php echo $total_downloads > 0
+                            ? esc_html(round(($completed_downloads / $total_downloads) * 100, 2)) . '%'
+                            : '0%'; ?></h3>
                 <p style="margin: 5px 0 0 0;">Conversion Rate</p>
             </div>
         </div>
@@ -159,18 +161,18 @@
     jQuery(document).ready(function($) {
         // Copy shortcode functionality
         $('.copy-shortcode').on('click', function() {
-            var shortcode = $(this).data('shortcode');
+            const shortcode = $(this).data('shortcode');
 
-            // Create temporary textarea to copy text
-            var temp = $('<textarea>');
+            // Create a temporary textarea to copy text
+            const temp = $('<textarea>');
             $('body').append(temp);
             temp.val(shortcode).select();
             document.execCommand('copy');
             temp.remove();
 
             // Show feedback
-            var button = $(this);
-            var originalText = button.text();
+            const button = $(this);
+            const originalText = button.text();
             button.text('Copied!').prop('disabled', true);
 
             setTimeout(function() {
@@ -180,10 +182,10 @@
 
         // File upload preview
         $('#lead_magnet_file').on('change', function() {
-            var file = this.files[0];
+            const file = this.files[0];
             if (file) {
-                var fileSize = file.size;
-                var maxSize = <?php echo wp_max_upload_size(); ?>;
+                const fileSize = file.size;
+                let maxSize =<?php echo esc_html(wp_max_upload_size()); ?>;
 
                 if (fileSize > maxSize) {
                     alert('File size exceeds maximum allowed size of ' + (maxSize / (1024 * 1024)).toFixed(2) + 'MB');
@@ -192,7 +194,7 @@
                 }
 
                 // Show file info
-                var info = 'Selected: ' + file.name + ' (' + (fileSize / (1024 * 1024)).toFixed(2) + 'MB)';
+                const info = 'Selected: ' + file.name + ' (' + (fileSize / (1024 * 1024)).toFixed(2) + 'MB)';
                 if (!$('.file-info').length) {
                     $(this).after('<p class="file-info description">' + info + '</p>');
                 } else {

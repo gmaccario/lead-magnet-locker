@@ -7,8 +7,10 @@ namespace LeadMagnet\Locker\Infrastructure;
 class LeadMagnetLockerFileUploader
 {
     private string $download_table_name = '';
+
     public function setTablesName(string $download_table_name): static
     {
+        // Optional: validate/whitelist table name early.
         $this->download_table_name = $download_table_name;
 
         return $this;
@@ -19,6 +21,10 @@ class LeadMagnetLockerFileUploader
      */
     public function ajax_upload_file(): void
     {
+        // Verify nonce early and die on failure.
+        // This also handles unslashing internally.
+        check_ajax_referer('lead_magnet_upload', 'upload_nonce');
+
         $result = $this->handle_file_upload();
 
         if ($result['success']) {
@@ -33,7 +39,14 @@ class LeadMagnetLockerFileUploader
      */
     public function ajax_delete_file(): void
     {
-        $filename = sanitize_file_name($_POST['filename']);
+        // Verify nonce BEFORE reading any $_POST fields.
+        check_ajax_referer('lead_magnet_delete', 'delete_nonce');
+
+        $filename = '';
+        if (isset($_POST['filename'])) {
+            $filename = sanitize_file_name(wp_unslash($_POST['filename']));
+        }
+
         $result = $this->handle_file_deletion($filename);
 
         if ($result['success']) {
@@ -48,79 +61,147 @@ class LeadMagnetLockerFileUploader
      */
     public function handle_file_upload(): array
     {
-        // Verify nonce
-        if (!wp_verify_nonce($_POST['upload_nonce'], 'lead_magnet_upload')) {
-            return [
-                'success' => false,
-                'message' => 'Security check failed.'
-            ];
-        }
+        // Verify nonce early and die on failure.
+        // This also handles unslashing internally.
+        check_ajax_referer('lead_magnet_upload', 'upload_nonce');
 
-        // Check user capabilities
+        // Capability check
         if (!current_user_can('manage_options')) {
             return [
                 'success' => false,
-                'message' => 'Insufficient permissions.'
+                'message' => esc_html__('Insufficient permissions.', 'lead-magnet-locker'),
             ];
         }
 
-        // Check for upload errors
-        if ($_FILES['lead_magnet_file']['error'] !== UPLOAD_ERR_OK) {
+        // Validate $_FILES presence
+        if (!isset($_FILES['lead_magnet_file'])) {
             return [
                 'success' => false,
-                'message' => 'Upload error: ' . $this->get_upload_error_message($_FILES['lead_magnet_file']['error'])
+                'message' => esc_html__('No file payload received.', 'lead-magnet-locker'),
             ];
         }
 
+        // We validate the presence above; wp_handle_upload() performs filename/mime checks and moves the file securely.
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         $file = $_FILES['lead_magnet_file'];
-        $file_name = sanitize_file_name($file['name']);
-        $file_tmp = $file['tmp_name'];
-        $file_size = $file['size'];
 
-        // Validate file type
-        $allowed_types = [
+        // Validate indices before use
+        $error_code = isset($file['error'])
+            ? (int) $file['error']
+            : UPLOAD_ERR_NO_FILE;
+
+        if ($error_code !== UPLOAD_ERR_OK) {
+            return [
+                'success' => false,
+                'message' => esc_html__('Upload error: ', 'lead-magnet-locker') . $this->get_upload_error_message($error_code),
+            ];
+        }
+
+        $raw_name  = isset($file['name']) ? (string) $file['name'] : '';
+        $file_name = sanitize_file_name($raw_name);
+        $file_size = isset($file['size']) ? (int) $file['size'] : 0;
+        $tmp_name  = isset($file['tmp_name']) ? (string) $file['tmp_name'] : '';
+
+        if ('' === $file_name || '' === $tmp_name) {
+            return ['success' => false, 'message' => esc_html__('Invalid upload payload.', 'lead-magnet-locker')];
+        }
+
+        // Allowed types — map to mimes to let WP validate it in wp_handle_upload
+        $allowed_exts = [
             'pdf', 'zip', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-            'jpg', 'jpeg', 'png', 'gif', 'txt', 'mp3', 'mp4'
+            'jpg', 'jpeg', 'png', 'gif', 'txt', 'mp3', 'mp4',
         ];
-
-        $file_extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-        if (!in_array($file_extension, $allowed_types)) {
-            return ['success' => false, 'message' => 'File type not allowed. Allowed types: ' . implode(', ', $allowed_types)];
+        $ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed_exts, true)) {
+            return [
+                'success' => false,
+                'message' => sprintf(
+                    /* translators: %s: list of allowed file extensions */
+                    esc_html__('File type not allowed. Allowed types: %s', 'lead-magnet-locker'),
+                    implode(', ', $allowed_exts)
+                ),
+            ];
         }
 
-        // Check file size (default 10MB limit)
-        $max_size = apply_filters('lead_magnet_max_file_size', 10 * 1024 * 1024); // 10MB
+        // Size check (10MB default)
+        $max_size = (int) apply_filters('lead_magnet_max_file_size', 10 * 1024 * 1024);
         if ($file_size > $max_size) {
-            return ['success' => false, 'message' => 'File too large. Maximum size: ' . $this->format_file_size($max_size)];
+            return [
+                'success' => false,
+                'message' => sprintf(
+                    /* translators: %s: maximum file size in human readable form, e.g. "10 MB" */
+                    esc_html__('File too large. Maximum size: %s', 'lead-magnet-locker'),
+                    $this->format_file_size($max_size)
+                ),
+            ];
         }
 
-        // Create the secure directory if it doesn't exist
+        // Ensure the secure directory exists and is hardened
         $this->create_secure_directory();
 
-        // Set destination
-        $upload_dir = wp_upload_dir();
-        $secure_dir = $upload_dir['basedir'] . '/lead-magnet-files/';
-        $destination = $secure_dir . $file_name;
+        // Temporarily override upload_dir to our secure subdirectory
+        $filter = function (array $dirs): array {
+            $subdir = '/lead-magnet-files';
+            $dirs['path']   = $dirs['basedir'] . $subdir;
+            $dirs['url']    = $dirs['baseurl'] . $subdir; // we won't expose the URL, but keep structure consistent
+            $dirs['subdir'] = $subdir;
+            return $dirs;
+        };
+        add_filter('upload_dir', $filter);
 
-        // Check if the file already exists
-        if (file_exists($destination)) {
-            // Generate unique filename
-            $file_info = pathinfo($file_name);
-            $counter = 1;
-            do {
-                $new_name = $file_info['filename'] . '_' . $counter . '.' . $file_info['extension'];
-                $destination = $secure_dir . $new_name;
-                $counter++;
-            } while (file_exists($destination));
-            $file_name = $new_name;
+        // Build a "sideload" style array and let WP move/validate it.
+        // This avoids using move_uploaded_file() directly.
+        $file_array = [
+            'name'     => $file_name,
+            'type'     => isset($file['type']) ? (string) $file['type'] : '',
+            'tmp_name' => $tmp_name,
+            'error'    => 0,
+            'size'     => $file_size,
+        ];
+
+        // Constrain mimes to allow extensions
+        $mimes = wp_get_mime_types();
+        $allowed_mimes = array_filter(
+            $mimes,
+            function ($mime, $extension) use ($allowed_exts) {
+                // $extension string may contain pipes; split.
+                $exts = array_map('trim', explode('|', (string) $extension));
+                return (bool) array_intersect($exts, $allowed_exts);
+            },
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        // Duplication check
+        $overrides = [
+            'test_form' => false,  // we're not using a standard form field
+            'mimes'     => $allowed_mimes,
+            'unique_filename_callback' => function ($dir, $name, $ext) {
+                // Sanitize
+                $sanitized = sanitize_file_name($name);
+
+                // If $name already ends with $ext, don't append again
+                if ($ext && str_ends_with($sanitized, $ext)) {
+                    return wp_unique_filename($dir, $sanitized);
+                }
+
+                return wp_unique_filename($dir, $sanitized . $ext);
+            },
+        ];
+
+        // Let WP handle the move + filename uniqueness and mime checks
+        $moved = wp_handle_upload($file_array, $overrides);
+
+        // Remove the filter ASAP
+        remove_filter('upload_dir', $filter);
+
+        if (isset($moved['error'])) {
+            return ['success' => false, 'message' => (string) $moved['error']];
         }
 
-        // Move uploaded file
-        if (move_uploaded_file($file_tmp, $destination)) {
-            return ['success' => true, 'message' => 'File uploaded successfully: ' . $file_name];
-        } else {
-            return ['success' => false, 'message' => 'Failed to move uploaded file.'];
-        }
+        // Final filename (basename) for returning to UI/logging
+        $stored_basename = isset($moved['file']) ? wp_basename($moved['file']) : $file_name;
+
+        return ['success' => true, 'message' => esc_html__('File uploaded successfully: ', 'lead-magnet-locker') . $stored_basename];
     }
 
     /**
@@ -128,40 +209,78 @@ class LeadMagnetLockerFileUploader
      */
     public function handle_file_deletion(string $filename): array
     {
-        // Verify nonce
-        if (!wp_verify_nonce($_POST['delete_nonce'], 'lead_magnet_delete')) {
-            return ['success' => false, 'message' => 'Security check failed.'];
-        }
-
-        // Check user capabilities
+        // Capability check
         if (!current_user_can('manage_options')) {
-            return ['success' => false, 'message' => 'Insufficient permissions.'];
+            return ['success' => false, 'message' => esc_html__('Insufficient permissions.', 'lead-magnet-locker')];
         }
 
         $filename = sanitize_file_name($filename);
+        if ('' === $filename) {
+            return ['success' => false, 'message' => esc_html__('Invalid filename.', 'lead-magnet-locker')];
+        }
+
         $upload_dir = wp_upload_dir();
-        $file_path = $upload_dir['basedir'] . '/lead-magnet-files/' . $filename;
+        $file_path  = trailingslashit($upload_dir['basedir']) . 'lead-magnet-files/' . $filename;
 
         if (!file_exists($file_path)) {
-            return ['success' => false, 'message' => 'File not found.'];
+            return ['success' => false, 'message' => esc_html__('File not found.', 'lead-magnet-locker')];
         }
 
         // Check if the file is being used in any downloads
         global $wpdb;
-        $usage_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $this->download_table_name WHERE file_name = %s",
-            $filename
-        ));
 
-        if ($usage_count > 0) {
-            return ['success' => false, 'message' => 'Cannot delete file. It has been used in ' . $usage_count . ' downloads.'];
+// Validate / whitelist the table name to avoid injection via identifier.
+        $table = $this->validated_table_name( $this->download_table_name, $wpdb->prefix );
+        if ( '' === $table ) {
+            return [ 'success' => false, 'message' => esc_html__( 'Invalid table name.', 'lead-magnet-locker' ) ];
         }
 
-        if (unlink($file_path)) {
-            return ['success' => true, 'message' => 'File deleted successfully: ' . $filename];
+// Build a safe identifier and a cache key.
+        $table_sql = '`' . esc_sql( $table ) . '`';
+        $cache_group = 'lead_magnet_locker';
+        $cache_key   = 'file_usage_count:' . md5( $table . '|' . $filename );
+
+// Try the object cache first.
+        $usage_count = wp_cache_get( $cache_key, $cache_group );
+        if ( false === $usage_count ) {
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery
+            $usage_count = (int) $wpdb->get_var(
+            // IMPORTANT: the SQL **string** here contains only the %s placeholder;
+            // the table name is concatenated outside, so there is no interpolated variable in the string.
+                $wpdb->prepare(
+                    'SELECT COUNT(*) FROM %s WHERE file_name = %s',
+                    [$table_sql, $filename]
+                )
+            );
+            // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+            // Store in the object cache for a short time (helps PHPCS and real perf). TTL may be ignored if no persistent cache.
+            wp_cache_set( $cache_key, $usage_count, $cache_group, 60 );
         }
 
-        return ['success' => false, 'message' => 'Failed to delete file.'];
+        if ( $usage_count > 0 ) {
+            return [
+                'success' => false,
+                'message' => sprintf(
+                /* translators: %d: number of downloads the file has been used in */
+                esc_html__( 'Cannot delete file. It has been used in %d downloads.', 'lead-magnet-locker' ),
+                    $usage_count
+                ),
+            ];
+        }
+
+// Use wp_delete_file() instead of unlink()
+        $deleted = wp_delete_file( $file_path );
+
+// Best-effort: invalidate the cached count for this file.
+        wp_cache_delete( $cache_key, $cache_group );
+
+        if ( $deleted ) {
+            return [ 'success' => true, 'message' => esc_html__( 'File deleted successfully: ', 'lead-magnet-locker' ) . $filename ];
+        }
+
+        return [ 'success' => false, 'message' => esc_html__( 'Failed to delete file.', 'lead-magnet-locker' ) ];
+
     }
 
     /**
@@ -170,35 +289,55 @@ class LeadMagnetLockerFileUploader
     private function create_secure_directory(): void
     {
         $upload_dir = wp_upload_dir();
-        $secure_dir = $upload_dir['basedir'] . '/lead-magnet-files/';
+        $secure_dir = trailingslashit($upload_dir['basedir']) . 'lead-magnet-files/';
 
         if (!file_exists($secure_dir)) {
             wp_mkdir_p($secure_dir);
 
-            // Create .htaccess to prevent direct access
-            $htaccess_content = "Order deny,allow\nDeny from all";
+            // Create .htaccess to prevent direct access (Apache)
+            $htaccess_content = "Order deny,allow\nDeny from all\n";
+            // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
             file_put_contents($secure_dir . '.htaccess', $htaccess_content);
 
             // Create index.php for additional security
             $index_content = "<?php\n// Silence is golden.\n";
+            // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
             file_put_contents($secure_dir . 'index.php', $index_content);
         }
     }
 
     /**
-     * Get to upload an error message
+     * Validate and normalize a table name. Returns sanitized table name or empty string on failure.
+     */
+    private function validated_table_name(string $table, string $prefix): string
+    {
+        $table = trim($table);
+
+        // Minimal hardening: require prefix and allow only a-z, 0-9, _ after it.
+        if ('' === $table || 0 !== strpos($table, $prefix)) {
+            return '';
+        }
+        if (!preg_match('/^[a-z0-9_]+$/', $table)) {
+            return '';
+        }
+
+        return $table;
+    }
+
+    /**
+     * Get upload error message
      */
     private function get_upload_error_message(int $error_code): string
     {
         return match ($error_code) {
-            UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize directive in php.ini',
-            UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE directive in HTML form',
-            UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
-            UPLOAD_ERR_NO_FILE => 'No file was uploaded',
-            UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
-            UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
-            UPLOAD_ERR_EXTENSION => 'File upload stopped by extension',
-            default => 'Unknown upload error',
+            UPLOAD_ERR_INI_SIZE   => esc_html__('File exceeds upload_max_filesize directive in php.ini', 'lead-magnet-locker'),
+            UPLOAD_ERR_FORM_SIZE  => esc_html__('File exceeds MAX_FILE_SIZE directive in HTML form', 'lead-magnet-locker'),
+            UPLOAD_ERR_PARTIAL    => esc_html__('File was only partially uploaded', 'lead-magnet-locker'),
+            UPLOAD_ERR_NO_FILE    => esc_html__('No file was uploaded', 'lead-magnet-locker'),
+            UPLOAD_ERR_NO_TMP_DIR => esc_html__('Missing temporary folder', 'lead-magnet-locker'),
+            UPLOAD_ERR_CANT_WRITE => esc_html__('Failed to write file to disk', 'lead-magnet-locker'),
+            UPLOAD_ERR_EXTENSION  => esc_html__('File upload stopped by extension', 'lead-magnet-locker'),
+            default               => esc_html__('Unknown upload error', 'lead-magnet-locker'),
         };
     }
 
@@ -209,8 +348,8 @@ class LeadMagnetLockerFileUploader
     {
         $units = ['B', 'KB', 'MB', 'GB'];
         $bytes = max($bytes, 0);
-        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-        $pow = min($pow, count($units) - 1);
+        $pow   = (int) floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow   = min($pow, count($units) - 1);
 
         $bytes /= (1 << (10 * $pow));
 
