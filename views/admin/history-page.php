@@ -1,4 +1,6 @@
-<div class="wrap">
+<?php if ( ! defined( 'ABSPATH' ) ) { exit; } ?>
+
+<div class="lead-magnet-locker wrap">
     <h1>Download History</h1>
 
     <div class="tablenav top">

@@ -235,21 +235,20 @@ class LeadMagnetLockerFileUploader
             return [ 'success' => false, 'message' => esc_html__( 'Invalid table name.', 'lead-magnet-locker' ) ];
         }
 
-// Build a safe identifier and a cache key.
-        $table_sql = '`' . esc_sql( $table ) . '`';
+        // Build a safe identifier and a cache key.
         $cache_group = 'lead_magnet_locker';
         $cache_key   = 'file_usage_count:' . md5( $table . '|' . $filename );
 
-// Try the object cache first.
+        // Try the object cache first.
         $usage_count = wp_cache_get( $cache_key, $cache_group );
         if ( false === $usage_count ) {
             // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery
             $usage_count = (int) $wpdb->get_var(
-            // IMPORTANT: the SQL **string** here contains only the %s placeholder;
-            // the table name is concatenated outside, so there is no interpolated variable in the string.
+                // IMPORTANT: the SQL **string** here contains only the %s placeholder;
+                // the table name is concatenated outside, so there is no interpolated variable in the string.
                 $wpdb->prepare(
-                    'SELECT COUNT(*) FROM %s WHERE file_name = %s',
-                    [$table_sql, $filename]
+                    "SELECT COUNT(*) FROM {$this->download_table_name} WHERE file_name = %s",
+                    [$filename]
                 )
             );
             // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -269,10 +268,10 @@ class LeadMagnetLockerFileUploader
             ];
         }
 
-// Use wp_delete_file() instead of unlink()
+        // Use wp_delete_file() instead of unlink()
         $deleted = wp_delete_file( $file_path );
 
-// Best-effort: invalidate the cached count for this file.
+        // Best-effort: invalidate the cached count for this file.
         wp_cache_delete( $cache_key, $cache_group );
 
         if ( $deleted ) {

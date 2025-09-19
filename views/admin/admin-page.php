@@ -4,35 +4,9 @@
  */
 ?>
 
-<style>
-    .card {
-        max-width: 100%;
-    }
-    .copy-shortcode {
-        margin-left: 10px;
-        font-size: 11px;
-        height: 22px;
-        line-height: 1;
-    }
+<?php if ( ! defined( 'ABSPATH' ) ) { exit; } ?>
 
-    .file-info {
-        color: #0073aa;
-        font-weight: 500;
-    }
-
-    #file-upload-form {
-        background: #f9f9f9;
-        padding: 20px;
-        border-radius: 5px;
-    }
-
-    .card h2 {
-        border-bottom: 1px solid #ddd;
-        padding-bottom: 10px;
-    }
-</style>
-
-<div class="wrap">
+<div class="lead-magnet-locker wrap">
     <h1>Lead Magnet Locker</h1>
 
     <?php if (!empty($upload_message)): ?>
@@ -156,51 +130,3 @@
         </div>
     </div>
 </div>
-
-<script>
-    jQuery(document).ready(function($) {
-        // Copy shortcode functionality
-        $('.copy-shortcode').on('click', function() {
-            const shortcode = $(this).data('shortcode');
-
-            // Create a temporary textarea to copy text
-            const temp = $('<textarea>');
-            $('body').append(temp);
-            temp.val(shortcode).select();
-            document.execCommand('copy');
-            temp.remove();
-
-            // Show feedback
-            const button = $(this);
-            const originalText = button.text();
-            button.text('Copied!').prop('disabled', true);
-
-            setTimeout(function() {
-                button.text(originalText).prop('disabled', false);
-            }, 2000);
-        });
-
-        // File upload preview
-        $('#lead_magnet_file').on('change', function() {
-            const file = this.files[0];
-            if (file) {
-                const fileSize = file.size;
-                let maxSize =<?php echo esc_html(wp_max_upload_size()); ?>;
-
-                if (fileSize > maxSize) {
-                    alert('File size exceeds maximum allowed size of ' + (maxSize / (1024 * 1024)).toFixed(2) + 'MB');
-                    $(this).val('');
-                    return;
-                }
-
-                // Show file info
-                const info = 'Selected: ' + file.name + ' (' + (fileSize / (1024 * 1024)).toFixed(2) + 'MB)';
-                if (!$('.file-info').length) {
-                    $(this).after('<p class="file-info description">' + info + '</p>');
-                } else {
-                    $('.file-info').text(info);
-                }
-            }
-        });
-    });
-</script>

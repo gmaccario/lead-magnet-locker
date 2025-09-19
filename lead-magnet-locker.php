@@ -138,7 +138,7 @@ class LeadMagnetLocker {
     /**
      * Delete download record via AJAX
      */
-    public function delete_download_record(): void
+    public function leadmalo_delete_download_record(): void
     {
         // Validate and sanitize nonce
         $nonce = isset($_POST['nonce']) ? wp_unslash(sanitize_text_field($_POST['nonce'])) : '';
@@ -354,7 +354,7 @@ class LeadMagnetLocker {
     {
         // Verify nonce with proper validation and sanitization
         $nonce = isset($_POST['nonce']) ? wp_unslash(sanitize_text_field($_POST['nonce'])) : '';
-        if (!wp_verify_nonce($nonce, 'lead_magnet_nonce')) {
+        if (!wp_verify_nonce($nonce, 'leadmalo_public_nonce')) {
             wp_die('Security check failed');
         }
 

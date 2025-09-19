@@ -10,7 +10,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
  *
  * @return WP_Filesystem_Base|false
  */
-function lml_get_wp_filesystem() {
+function leadmalo_get_wp_filesystem() {
     global $wp_filesystem;
 
     if ( $wp_filesystem instanceof WP_Filesystem_Base ) {
@@ -34,8 +34,9 @@ function lml_get_wp_filesystem() {
  * @param string $dir Absolute path to directory to remove.
  * @return void
  */
-function lml_rrmdir( $dir ) {
-    $fs = lml_get_wp_filesystem();
+function leadmalo_rrmdir( $dir ): void
+{
+    $fs = leadmalo_get_wp_filesystem();
 
     // If FS is available, prefer it (with recursive rmdir).
     if ( $fs && $fs->is_dir( $dir ) ) {
@@ -49,7 +50,7 @@ function lml_rrmdir( $dir ) {
 
     // Fallback (no FS): still avoid discouraged functions by using WP helpers where possible.
     if ( is_dir( $dir ) ) {
-        // Walk directory tree manually.
+        // Walk the directory tree manually.
         $items = scandir( $dir );
         if ( is_array( $items ) ) {
             foreach ( $items as $item ) {
@@ -60,7 +61,7 @@ function lml_rrmdir( $dir ) {
                 $path = $dir . DIRECTORY_SEPARATOR . $item;
 
                 if ( is_dir( $path ) ) {
-                    lml_rrmdir( $path ); // recurse
+                    leadmalo_rrmdir( $path ); // recurse
                 } else {
                     // Use WP core helper for files.
                     wp_delete_file( $path );
@@ -78,7 +79,7 @@ function lml_rrmdir( $dir ) {
 /**
  * Cleanup logic per site.
  */
-function lml_cleanup_site() {
+function leadmalo_cleanup_site() {
     global $wpdb;
 
     $download_table = $wpdb->prefix . 'lead_magnet_downloads';
@@ -102,21 +103,21 @@ function lml_cleanup_site() {
             // If you previously checked writability with is_writable(), switch to wp_is_writable().
             if ( function_exists( 'wp_is_writable' ) ) {
                 if ( wp_is_writable( $secure_dir ) ) {
-                    lml_rrmdir( $secure_dir );
+                    leadmalo_rrmdir( $secure_dir );
                 } else {
                     // Try to make it writable using WP_Filesystem before delete.
-                    $fs = lml_get_wp_filesystem();
+                    $fs = leadmalo_get_wp_filesystem();
                     if ( $fs ) {
                         $fs->chmod( $secure_dir, FS_CHMOD_DIR );
-                        lml_rrmdir( $secure_dir );
+                        leadmalo_rrmdir( $secure_dir );
                     } else {
                         // As a last ditch, attempt deletion anyway (rrmdir handles fallbacks).
-                        lml_rrmdir( $secure_dir );
+                        leadmalo_rrmdir( $secure_dir );
                     }
                 }
             } else {
                 // Older WP: fallback directly to removal (rrmdir handles FS where available).
-                lml_rrmdir( $secure_dir );
+                leadmalo_rrmdir( $secure_dir );
             }
         }
     }
@@ -133,12 +134,12 @@ if ( function_exists( 'is_multisite' ) && is_multisite() ) {
 
         foreach ( $blog_ids as $blog_id ) {
             switch_to_blog( (int) $blog_id );
-            lml_cleanup_site();
+            leadmalo_cleanup_site();
         }
 
         // Restore current blog context
         switch_to_blog( (int) $current_blog_id );
     }
 } else {
-    lml_cleanup_site();
+    leadmalo_cleanup_site();
 }

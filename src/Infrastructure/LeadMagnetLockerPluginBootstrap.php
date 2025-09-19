@@ -55,8 +55,8 @@ class LeadMagnetLockerPluginBootstrap {
     {
         add_action('init', [$this, 'init']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_scripts']);
-        add_action('wp_ajax_submit_email', [$this->plugin, 'handle_email_submission']);
-        add_action('wp_ajax_nopriv_submit_email', [$this->plugin, 'handle_email_submission']);
+        add_action('wp_ajax_leadmalo_submit_email', [$this->plugin, 'handle_email_submission']);
+        add_action('wp_ajax_nopriv_leadmalo_submit_email', [$this->plugin, 'handle_email_submission']);
         add_action('init', [$this->downloader, 'handle_download']);
 
         // AJAX handlers for file management
@@ -67,7 +67,7 @@ class LeadMagnetLockerPluginBootstrap {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'admin_init']);
         add_action('admin_enqueue_scripts', [$this, 'admin_enqueue_scripts']);
-        add_action('wp_ajax_delete_download_record', [$this->plugin, 'delete_download_record']);
+        add_action('wp_ajax_leadmalo_delete_download_record', [$this->plugin, 'leadmalo_delete_download_record']);
     }
 
     private function add_filters(): void
@@ -98,6 +98,7 @@ class LeadMagnetLockerPluginBootstrap {
             'ajax_url'       => admin_url('admin-ajax.php'),
             'nonce'          => wp_create_nonce('lead_magnet_admin_nonce'),
             'confirm_delete' => __('Are you sure you want to delete this record?', 'lead-magnet-locker'),
+            'wp_max_upload_size' => esc_html(wp_max_upload_size()),
         ]);
     }
 
@@ -167,8 +168,29 @@ class LeadMagnetLockerPluginBootstrap {
         wp_enqueue_script('jquery');
         wp_localize_script('jquery', 'lead_magnet_ajax', [
             'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('lead_magnet_nonce')
+            'nonce' => wp_create_nonce('leadmalo_public_nonce')
         ]);
+
+        wp_register_style(
+            'leadmalo-public',
+            plugin_dir_url($this->main_file) . 'views/public/assets/css/public.css',
+            [],
+            '1.0'
+        );
+        wp_enqueue_style('leadmalo-public');
+
+        wp_register_script(
+            'leadmalo-public',
+            plugin_dir_url($this->main_file) . 'views/public/assets/js/public.js',
+            ['jquery'],
+            '1.0',
+            true
+        );
+        wp_localize_script('leadmalo-public', 'leadmaloPublic', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce'   => wp_create_nonce('leadmalo_public_nonce'),
+        ]);
+        wp_enqueue_script('leadmalo-public');
     }
 
     /**

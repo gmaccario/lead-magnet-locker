@@ -1,0 +1,25 @@
+.card {
+    max-width: 100%;
+}
+.copy-shortcode {
+    margin-left: 10px;
+    font-size: 11px;
+    height: 22px;
+    line-height: 1;
+}
+
+.file-info {
+    color: #0073aa;
+    font-weight: 500;
+}
+
+#file-upload-form {
+    background: #f9f9f9;
+    padding: 20px;
+    border-radius: 5px;
+}
+
+.card h2 {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+}
