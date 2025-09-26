@@ -97,12 +97,12 @@ class LeadMagnetLockerFileUploader
             ];
         }
 
-        $raw_name  = isset($file['name']) ? (string) $file['name'] : '';
+        $raw_name  = isset($file['name']) && is_string($file['name']) ? $file['name'] : '';
         $file_name = sanitize_file_name($raw_name);
         $file_size = isset($file['size']) ? (int) $file['size'] : 0;
-        $tmp_name  = isset($file['tmp_name']) ? (string) $file['tmp_name'] : '';
+        $tmp_name  = isset($file['tmp_name']) && is_string($file['tmp_name']) ? $file['tmp_name'] : '';
 
-        if ('' === $file_name || '' === $tmp_name) {
+        if ('' === $file_name || '' === $tmp_name || ! is_uploaded_file($tmp_name)) {
             return ['success' => false, 'message' => esc_html__('Invalid upload payload.', 'lead-magnet-locker')];
         }
 
@@ -153,7 +153,9 @@ class LeadMagnetLockerFileUploader
         // This avoids using move_uploaded_file() directly.
         $file_array = [
             'name'     => $file_name,
-            'type'     => isset($file['type']) ? (string) $file['type'] : '',
+            'type'     => isset($file['type']) && is_string($file['type'])
+                ? sanitize_mime_type($file['type'])
+                : '',
             'tmp_name' => $tmp_name,
             'error'    => 0,
             'size'     => $file_size,
@@ -190,6 +192,14 @@ class LeadMagnetLockerFileUploader
 
         // Let WP handle the move + filename uniqueness and mime checks
         $moved = wp_handle_upload($file_array, $overrides);
+
+        // Validate result: ensure WordPress accepted the file with expected type/ext
+        if (! $moved || ! empty($moved['error'])) {
+            if (isset($moved['error'])) {
+                return ['success' => false, 'message' => (string) $moved['error']];
+            }
+            return ['success' => false, 'message' => esc_html__('Upload failed.', 'lead-magnet-locker')];
+        }
 
         // Remove the filter ASAP
         remove_filter('upload_dir', $filter);
@@ -345,13 +355,14 @@ class LeadMagnetLockerFileUploader
      */
     public function format_file_size(int $bytes): string
     {
-        $units = ['B', 'KB', 'MB', 'GB'];
+        $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; // Added more units
         $bytes = max($bytes, 0);
         $pow   = (int) floor(($bytes ? log($bytes) : 0) / log(1024));
         $pow   = min($pow, count($units) - 1);
 
-        $bytes /= (1 << (10 * $pow));
+        $divisor = (float) pow(1024, $pow);
+        $size = $bytes / $divisor;
 
-        return round($bytes, 2) . ' ' . $units[$pow];
+        return number_format($size, 2) . ' ' . $units[$pow];
     }
 }

@@ -4,6 +4,7 @@
     <h1>Lead Magnet Settings</h1>
 
     <form method="post" action="">
+        <?php wp_nonce_field('lead_magnet_settings', 'settings_nonce'); ?>
         <table class="form-table">
             <tr>
                 <th scope="row">Date & Time Trigger</th>

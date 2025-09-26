@@ -5,6 +5,7 @@
 
     <div class="tablenav top">
         <form method="get" action="">
+            <?php wp_nonce_field('lead_magnet_history_search'); ?>
             <input type="hidden" name="page" value="lead-magnet-history">
             <p class="search-box">
                 <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Search emails or files...">

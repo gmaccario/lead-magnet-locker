@@ -26,6 +26,13 @@ class LeadMagnetLockerDownloader
 
         $download_key = sanitize_text_field($_GET['lead_magnet_download']);
 
+        // Verify nonce tied to this key to validate origin
+        $nonce = isset($_GET['lmd-nonce']) ? sanitize_text_field($_GET['lmd-nonce']) : '';
+        if (!wp_verify_nonce($nonce, 'lead_magnet_download_' . $download_key)) {
+            status_header(403);
+            exit('Forbidden');
+        }
+
         // Get download record from a database
         global $wpdb;
         $record = $wpdb->get_row($wpdb->prepare(

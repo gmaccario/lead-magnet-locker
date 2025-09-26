@@ -229,6 +229,14 @@ class LeadMagnetLocker {
     public function settings_page(): void
     {
         if (isset($_POST['submit'])) {
+            // Security: nonce + capability
+            if (!isset($_POST['settings_nonce']) || !wp_verify_nonce(wp_unslash(sanitize_text_field($_POST['settings_nonce'])), 'lead_magnet_settings')) {
+                wp_die(esc_html__('Security check failed.', 'lead-magnet-locker'));
+            }
+            if (!current_user_can('manage_options')) {
+                wp_die(esc_html__('Insufficient permissions.', 'lead-magnet-locker'));
+            }
+
             $this->update_setting('enable_date_trigger', isset($_POST['enable_date_trigger']) ? '1' : '0');
             $this->update_setting('start_date', sanitize_text_field($_POST['start_date']));
             $this->update_setting('end_date', sanitize_text_field($_POST['end_date']));
@@ -263,8 +271,11 @@ class LeadMagnetLocker {
 
         // Search functionality with proper validation and sanitization
         $search = '';
-        if (isset($_GET['s']) && !empty($_GET['s'])) {
-            $search = wp_unslash(sanitize_text_field($_GET['s']));
+        if (!empty($_GET['s'])) {
+            // Verify nonce passed in the GET form to validate the origin of the request
+            if (isset($_GET['_wpnonce']) && wp_verify_nonce(wp_unslash(sanitize_text_field($_GET['_wpnonce'])), 'lead_magnet_history_search')) {
+                $search = wp_unslash(sanitize_text_field($_GET['s']));
+            }
         }
 
         // Build query with proper prepared statements
@@ -400,7 +411,14 @@ class LeadMagnetLocker {
         }
 
         // Create download URL
-        $download_url = home_url('/?lead_magnet_download=' . $download_key);
+        $download_nonce = wp_create_nonce('lead_magnet_download_' . $download_key);
+        $download_url = add_query_arg(
+            [
+                'lead_magnet_download' => $download_key,
+                'lmd-nonce' => $download_nonce
+            ],
+            home_url('/')
+        );
 
         wp_send_json_success([
             'message' => 'Success! Your download is ready.',

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<ruleset name="Lead Magnet Locker">
+    <description>Project coding standards.</description>
+
+    <!-- Base standard -->
+    <rule ref="WordPress"/>
+
+    <!-- Scan these folders -->
+    <file>lead-magnet-locker.php</file>
+    <file>src</file>
+    <file>views</file>
+
+    <!-- Exclude third-party/vendor code -->
+    <exclude-pattern>vendor/*</exclude-pattern>
+    <exclude-pattern>node_modules/*</exclude-pattern>
+</ruleset>
