@@ -13,4 +13,8 @@
     <!-- Exclude third-party/vendor code -->
     <exclude-pattern>vendor/*</exclude-pattern>
     <exclude-pattern>node_modules/*</exclude-pattern>
+
+    <rule ref="WordPress.Files.FileName">
+        <exclude-pattern>lead-magnet-locker.php</exclude-pattern>
+    </rule>
 </ruleset>
