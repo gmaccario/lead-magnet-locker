@@ -5,7 +5,7 @@ Tags: lead, downloads, email capture, forms, gdpr
 Requires at least: 6.7
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -193,7 +193,11 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 
 == Changelog ==
 
-= 1.1.0 =
+= 1.1.1 =
+* Make the plugin complaint with the WordPress coding standard
+* Fix issues after first volunteer's review
+
+= 1.1.0=
 * Added a comprehensive admin dashboard
 * Implemented a date/time scheduling system
 * Enhanced download tracking and analytics

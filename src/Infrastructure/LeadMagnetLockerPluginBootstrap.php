@@ -387,7 +387,7 @@ class LeadMagnetLockerPluginBootstrap {
 	 * @return array Modified plugin action links with the Settings link added.
 	 */
 	public function add_plugin_action_links( array $links = array() ): mixed {
-		$settings_link = '<a href="' . admin_url( 'admin.php?page=lead-magnet-settings' ) . '">Settings</a>';
+		$settings_link = '<a href="' . admin_url( 'admin.php?page=lead-magnet-locker' ) . '">Settings</a>';
 		array_unshift( $links, $settings_link );
 		return $links;
 	}
