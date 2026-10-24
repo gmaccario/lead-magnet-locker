@@ -44,14 +44,16 @@ class LeadMagnetLockerPluginBootstrap {
 	 *
 	 * Wires the application core, file uploader, and downloader services.
 	 *
-	 * @param LeadMagnetLocker             $plugin        Main application instance.
-	 * @param LeadMagnetLockerFileUploader $file_uploader Uploader service for admin file ops.
-	 * @param LeadMagnetLockerDownloader   $downloader    Public downloader handler.
+	 * @param LeadMagnetLocker                $plugin           Main application instance.
+	 * @param LeadMagnetLockerFileUploader    $file_uploader    Uploader service for admin file ops.
+	 * @param LeadMagnetLockerDownloader      $downloader       Public downloader handler.
+	 * @param LeadMagnetLockerHistoryExporter $history_exporter Download history CSV exporter.
 	 */
 	public function __construct(
 		private readonly LeadMagnetLocker $plugin,
 		private readonly LeadMagnetLockerFileUploader $file_uploader,
 		private readonly LeadMagnetLockerDownloader $downloader,
+		private readonly LeadMagnetLockerHistoryExporter $history_exporter,
 	) {
 	}
 
@@ -130,6 +132,8 @@ class LeadMagnetLockerPluginBootstrap {
 		add_action( 'admin_init', array( $this, 'admin_init' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 		add_action( 'wp_ajax_leadmalo_delete_download_record', array( $this->plugin, 'leadmalo_delete_download_record' ) );
+		add_action( 'admin_post_' . LeadMagnetLockerHistoryExporter::ACTION, array( $this->history_exporter, 'handle_export' ) );
+		add_action( 'admin_post_' . LeadMagnetLockerDownloader::ADMIN_ACTION, array( $this->downloader, 'handle_admin_download' ) );
 	}
 
 	/**
@@ -148,16 +152,25 @@ class LeadMagnetLockerPluginBootstrap {
 	 * @return void
 	 */
 	public function admin_enqueue_scripts( string $hook ): void {
-		if ( ! str_contains( $hook, 'lead-magnet-locker' ) && ! str_contains( $hook, 'lead-magnet-history' ) ) {
+		$plugin_pages = array( 'lead-magnet-locker', 'lead-magnet-settings', 'lead-magnet-history' );
+		$is_plugin    = array_filter( $plugin_pages, static fn( string $page ): bool => str_contains( $hook, $page ) );
+		if ( empty( $is_plugin ) ) {
 			return;
 		}
+
+		wp_enqueue_style(
+			'lead-magnet-admin',
+			plugin_dir_url( $this->main_file ) . 'views/admin/assets/css/admin.css',
+			array(),
+			$this->asset_version( 'views/admin/assets/css/admin.css' )
+		);
 
 		// Enqueue your custom admin script.
 		wp_enqueue_script(
 			'lead-magnet-admin',
 			plugin_dir_url( $this->main_file ) . 'views/admin/assets/js/admin.js', // create this file.
 			array( 'jquery' ),
-			'1.0',
+			$this->asset_version( 'views/admin/assets/js/admin.js' ),
 			true
 		);
 
@@ -172,6 +185,20 @@ class LeadMagnetLockerPluginBootstrap {
 				'wp_max_upload_size' => esc_html( wp_max_upload_size() ),
 			)
 		);
+	}
+
+	/**
+	 * Asset version: plugin version plus file modification time, so browsers refetch edited files.
+	 *
+	 * @param string $relative_path Asset path relative to the plugin folder.
+	 * @return string
+	 */
+	private function asset_version( string $relative_path ): string {
+		$file = plugin_dir_path( $this->main_file ) . $relative_path;
+
+		return file_exists( $file )
+			? LML_PLUGIN_VERSION . '.' . filemtime( $file )
+			: LML_PLUGIN_VERSION;
 	}
 
 	/**
@@ -192,10 +219,32 @@ class LeadMagnetLockerPluginBootstrap {
 					'end_date'            => '',
 					'start_time'          => '00:00',
 					'end_time'            => '23:59',
-					'timezone'            => get_option( 'timezone_string', 'UTC' ),
+					'timezone'            => ( get_option( 'timezone_string' ) ? get_option( 'timezone_string' ) : 'UTC' ),
 				),
 			)
 		);
+	}
+
+	/**
+	 * Sanitize the legacy "lead_magnet_options" option (settings live in the custom table).
+	 *
+	 * @param mixed $options Raw option value.
+	 * @return array Sanitized options.
+	 */
+	public function sanitize_options( mixed $options ): array {
+		$options = is_array( $options ) ? $options : array();
+		$clean   = array(
+			'enable_date_trigger' => ! empty( $options['enable_date_trigger'] ) ? '1' : '0',
+		);
+
+		foreach ( array( 'start_date', 'end_date', 'start_time', 'end_time' ) as $key ) {
+			$clean[ $key ] = isset( $options[ $key ] ) ? sanitize_text_field( (string) $options[ $key ] ) : '';
+		}
+
+		$timezone          = isset( $options['timezone'] ) ? (string) $options['timezone'] : '';
+		$clean['timezone'] = in_array( $timezone, timezone_identifiers_list(), true ) ? $timezone : 'UTC';
+
+		return $clean;
 	}
 
 	/**
@@ -364,7 +413,7 @@ class LeadMagnetLockerPluginBootstrap {
 			'end_date'            => '',
 			'start_time'          => '00:00',
 			'end_time'            => '23:59',
-			'timezone'            => get_option( 'timezone_string', 'UTC' ),
+			'timezone'            => ( get_option( 'timezone_string' ) ? get_option( 'timezone_string' ) : 'UTC' ),
 		);
 
 		foreach ( $default_settings as $key => $value ) {

@@ -14,6 +14,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<h1>Download History</h1>
 
 	<div class="tablenav top">
+		<div class="alignleft actions">
+			<a href="<?php echo esc_url( $this->history_exporter->get_export_url( $search ) ); ?>" class="button">
+				<?php echo '' !== $search ? 'Export results (CSV)' : 'Export all (CSV)'; ?>
+			</a>
+		</div>
 		<form method="get" action="">
 			<?php wp_nonce_field( 'lead_magnet_history_search' ); ?>
 			<input type="hidden" name="page" value="lead-magnet-history">
@@ -64,7 +69,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</td>
 					<td>
 						<button class="button-secondary delete-record" data-id="<?php echo esc_attr( $record->id ); ?>">Delete</button>
-						<a href="<?php echo esc_attr( home_url( '/?lead_magnet_download=' . esc_attr( $record->download_key ) ) ); ?>" target="_blank" class="button-secondary">Download Link</a>
+						<a href="<?php echo esc_url( $this->downloader->get_admin_download_url( (int) $record->id ) ); ?>" class="button-secondary">Download File</a>
 					</td>
 				</tr>
 			<?php endforeach; ?>

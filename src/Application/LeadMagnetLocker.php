@@ -15,6 +15,7 @@ namespace LeadMagnet\Locker\Application;
 
 use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerDownloader;
 use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerFileUploader;
+use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerHistoryExporter;
 use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerPluginBootstrap;
 
 /**
@@ -53,6 +54,13 @@ class LeadMagnetLocker {
 	private LeadMagnetLockerDownloader $downloader;
 
 	/**
+	 * Download history CSV exporter service.
+	 *
+	 * @var LeadMagnetLockerHistoryExporter
+	 */
+	private LeadMagnetLockerHistoryExporter $history_exporter;
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
@@ -67,8 +75,11 @@ class LeadMagnetLocker {
 		$this->downloader = ( new LeadMagnetLockerDownloader() )
 			->set_tables_name( $this->download_table_name );
 
+		$this->history_exporter = ( new LeadMagnetLockerHistoryExporter() )
+			->set_tables_name( $this->download_table_name );
+
 		// Hook into WordPress.
-		( new LeadMagnetLockerPluginBootstrap( $this, $this->file_uploader, $this->downloader ) )
+		( new LeadMagnetLockerPluginBootstrap( $this, $this->file_uploader, $this->downloader, $this->history_exporter ) )
 			->set_tables_name( $this->download_table_name, $this->settings_table_name )
 			->set_main_file( LML_PLUGIN_FILE )
 			->hook_into_wp();
@@ -117,6 +128,17 @@ class LeadMagnetLocker {
 
 
 	/**
+	 * Get the configured timezone, falling back to UTC when empty or invalid.
+	 *
+	 * @return string A valid timezone identifier.
+	 */
+	private function get_timezone(): string {
+		$timezone = $this->get_setting( 'timezone' );
+
+		return in_array( $timezone, timezone_identifiers_list(), true ) ? $timezone : 'UTC';
+	}
+
+	/**
 	 * Check if the form should be visible based on date/time settings.
 	 *
 	 * @return bool
@@ -133,17 +155,21 @@ class LeadMagnetLocker {
 		$end_date   = $this->get_setting( 'end_date' );
 		$start_time = $this->get_setting( 'start_time' );
 		$end_time   = $this->get_setting( 'end_time' );
-		$timezone   = $this->get_setting( 'timezone', 'UTC' );
+		$timezone   = $this->get_timezone();
 
 		if ( empty( $start_date ) || empty( $end_date ) ) {
 			return true; // Show if dates are not set.
 		}
 
 		// Use WordPress timezone functions instead of PHP's date_default_timezone_set.
-		$wp_timezone    = new \DateTimeZone( $timezone );
-		$now            = new \DateTime( current_time( 'mysql' ), $wp_timezone );
-		$start_datetime = new \DateTime( $start_date . ' ' . $start_time . ':00', $wp_timezone );
-		$end_datetime   = new \DateTime( $end_date . ' ' . $end_time . ':59', $wp_timezone );
+		try {
+			$wp_timezone    = new \DateTimeZone( $timezone );
+			$now            = new \DateTime( current_time( 'mysql' ), $wp_timezone );
+			$start_datetime = new \DateTime( $start_date . ' ' . $start_time . ':00', $wp_timezone );
+			$end_datetime   = new \DateTime( $end_date . ' ' . $end_time . ':59', $wp_timezone );
+		} catch ( \Exception $e ) {
+			return true; // Malformed schedule values: fail open, as when dates are not set.
+		}
 
 		return ( $now >= $start_datetime && $now <= $end_datetime );
 	}
@@ -267,7 +293,8 @@ class LeadMagnetLocker {
 			$this->update_setting( 'end_date', sanitize_text_field( $_POST['end_date'] ) );
 			$this->update_setting( 'start_time', sanitize_text_field( $_POST['start_time'] ) );
 			$this->update_setting( 'end_time', sanitize_text_field( $_POST['end_time'] ) );
-			$this->update_setting( 'timezone', sanitize_text_field( $_POST['timezone'] ) );
+			$timezone = isset( $_POST['timezone'] ) ? sanitize_text_field( wp_unslash( $_POST['timezone'] ) ) : '';
+			$this->update_setting( 'timezone', in_array( $timezone, timezone_identifiers_list(), true ) ? $timezone : 'UTC' );
 
 			echo '<div class="notice notice-success"><p>Settings saved successfully!</p></div>';
 		}
@@ -277,7 +304,7 @@ class LeadMagnetLocker {
 		$end_date            = $this->get_setting( 'end_date' );
 		$start_time          = $this->get_setting( 'start_time' );
 		$end_time            = $this->get_setting( 'end_time' );
-		$timezone            = $this->get_setting( 'timezone' );
+		$timezone            = $this->get_timezone(); // Default: UTC (Greenwich Mean Time).
 
 		$view = LML_PLUGIN_DIR . 'views/admin/settings-page.php';
 		if ( is_readable( $view ) ) {
@@ -314,14 +341,17 @@ class LeadMagnetLocker {
 		$table_name = $wpdb->prefix . 'lead_magnet_downloads';
 
 		if ( ! empty( $search ) ) {
+			// Escape LIKE wildcards so "%" and "_" are searched literally.
+			$like = '%' . $wpdb->esc_like( $search ) . '%';
+
 			// Get total count with search.
 			// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$total_items = $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT COUNT(*) FROM {$table_name} WHERE email LIKE %s OR file_name LIKE %s",
-					"%{$search}%",
-					"%{$search}%"
+					$like,
+					$like
 				)
 			);
 
@@ -331,8 +361,8 @@ class LeadMagnetLocker {
 				// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
                 // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 					"SELECT * FROM {$table_name} WHERE email LIKE %s OR file_name LIKE %s ORDER BY created_at DESC LIMIT %d OFFSET %d",
-					"%{$search}%",
-					"%{$search}%",
+					$like,
+					$like,
 					$per_page,
 					$offset
 				)
@@ -394,10 +424,12 @@ class LeadMagnetLocker {
 		}
 
 		// Check if a file exists in a secure directory.
+		// Resolve the real path and make sure it stays inside the secure directory (blocks "../").
 		$upload_dir = wp_upload_dir();
-		$file_path  = $upload_dir['basedir'] . '/lead-magnet-files/' . $atts['file'];
+		$secure_dir = realpath( $upload_dir['basedir'] . '/lead-magnet-files' );
+		$file_path  = realpath( $upload_dir['basedir'] . '/lead-magnet-files/' . $atts['file'] );
 
-		if ( ! file_exists( $file_path ) ) {
+		if ( false === $secure_dir || false === $file_path || ! str_starts_with( $file_path, $secure_dir . DIRECTORY_SEPARATOR ) || ! is_file( $file_path ) ) {
 			return '<p><strong>Error:</strong> File not found. Please upload the file first from the WordPress admin dashboard</p>';
 		}
 

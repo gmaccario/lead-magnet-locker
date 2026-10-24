@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Lead Magnet Locker
  * Description: Collect emails in exchange for secure digital downloads. Protect your files, grow your list, and deliver assets automatically.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: G. Maccario
  * Author URI: https://www.giuseppemaccario.com/
  * License: GPL2 or later
@@ -11,7 +11,7 @@
  *
  * Requires PHP: 8.1
  * Requires at least: 6.7
- * Tested up to: 6.7.3
+ * Tested up to: 7.1
  *
  * @package LeadMagnetLocker
  */
@@ -47,6 +47,9 @@ if ( ! class_exists( '\LeadMagnet\Locker\Infrastructure\LeadMagnetLockerPluginBo
 	return;
 }
 
+if ( ! defined( 'LML_PLUGIN_VERSION' ) ) {
+	define( 'LML_PLUGIN_VERSION', '1.2.0' );
+}
 if ( ! defined( 'LML_PLUGIN_FILE' ) ) {
 	define( 'LML_PLUGIN_FILE', __FILE__ );
 }

@@ -18,6 +18,7 @@ jQuery( document ).ready(
 				const container    = form.closest( '.lead-magnet-form' );
 				const messagesDiv  = container.find( '.lead-magnet-messages' );
 				const submitButton = form.find( 'button[type="submit"]' );
+				const buttonText   = submitButton.text();
 
 				// Show loading state.
 				submitButton.text( 'Processing...' ).prop( 'disabled', true );

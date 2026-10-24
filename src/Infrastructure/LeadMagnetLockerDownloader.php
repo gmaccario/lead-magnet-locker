@@ -20,6 +20,11 @@ namespace LeadMagnet\Locker\Infrastructure;
 class LeadMagnetLockerDownloader {
 
 	/**
+	 * Action name used by admin-post.php and the nonce for admin downloads.
+	 */
+	public const ADMIN_ACTION = 'leadmalo_admin_download';
+
+	/**
 	 * Fully-qualified downloads table name (with $wpdb->prefix).
 	 *
 	 * @var string
@@ -48,10 +53,10 @@ class LeadMagnetLockerDownloader {
 			return;
 		}
 
-		$download_key = sanitize_text_field( $_GET['lead_magnet_download'] );
+		$download_key = sanitize_text_field( wp_unslash( $_GET['lead_magnet_download'] ) );
 
 		// Verify nonce tied to this key to validate origin.
-		$nonce = isset( $_GET['lmd-nonce'] ) ? sanitize_text_field( $_GET['lmd-nonce'] ) : '';
+		$nonce = isset( $_GET['lmd-nonce'] ) ? sanitize_text_field( wp_unslash( $_GET['lmd-nonce'] ) ) : '';
 		if ( ! wp_verify_nonce( $nonce, 'lead_magnet_download_' . $download_key ) ) {
 			status_header( 403 );
 			exit( 'Forbidden' );
@@ -61,6 +66,8 @@ class LeadMagnetLockerDownloader {
 		global $wpdb;
 		$record = $wpdb->get_row(
 			$wpdb->prepare(
+				// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				"SELECT * FROM $this->download_table_name WHERE download_key = %s",
 				$download_key
 			)
@@ -87,9 +94,76 @@ class LeadMagnetLockerDownloader {
 			array( '%d' )
 		);
 
-		// Serve the file.
+		$this->serve_file( $file_path );
+	}
+
+	/**
+	 * Build the admin download URL for a history record.
+	 *
+	 * @param int $record_id Download record ID.
+	 * @return string Nonce-protected admin-post.php URL.
+	 */
+	public function get_admin_download_url( int $record_id ): string {
+		return wp_nonce_url(
+			add_query_arg(
+				array(
+					'action'    => self::ADMIN_ACTION,
+					'record_id' => $record_id,
+				),
+				admin_url( 'admin-post.php' )
+			),
+			self::ADMIN_ACTION . '_' . $record_id
+		);
+	}
+
+	/**
+	 * Let an administrator download a record's file (runs on admin_post_{action}).
+	 *
+	 * Does not touch downloaded_at, so admin checks do not skew the statistics.
+	 *
+	 * @return void
+	 */
+	public function handle_admin_download(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Insufficient permissions.', 'lead-magnet-locker' ) );
+		}
+
+		$record_id = isset( $_GET['record_id'] ) ? absint( $_GET['record_id'] ) : 0;
+		check_admin_referer( self::ADMIN_ACTION . '_' . $record_id );
+
+		global $wpdb;
+		$record = $wpdb->get_row(
+			$wpdb->prepare(
+				// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT * FROM $this->download_table_name WHERE id = %d",
+				$record_id
+			)
+		);
+
+		if ( ! $record ) {
+			wp_die( esc_html__( 'Invalid download record.', 'lead-magnet-locker' ) );
+		}
+
+		$upload_dir = wp_upload_dir();
+		$file_path  = $upload_dir['basedir'] . '/lead-magnet-files/' . $record->file_name;
+
+		if ( ! file_exists( $file_path ) ) {
+			wp_die( esc_html__( 'File not found.', 'lead-magnet-locker' ) );
+		}
+
+		$this->serve_file( $file_path );
+	}
+
+	/**
+	 * Stream a file to the browser as an attachment and stop execution.
+	 *
+	 * @param string $file_path Absolute path to the file.
+	 * @return void
+	 */
+	private function serve_file( string $file_path ): void {
 		$file_info = pathinfo( $file_path );
-		$mime_type = $this->get_mime_type( $file_info['extension'] );
+		$mime_type = $this->get_mime_type( $file_info['extension'] ?? '' );
 
 		header( 'Content-Type: ' . $mime_type );
 		header( 'Content-Disposition: attachment; filename="' . basename( $file_path ) . '"' );

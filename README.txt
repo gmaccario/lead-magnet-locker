@@ -3,9 +3,9 @@ Contributors: gmaccario
 Donate link: https://www.giuseppemaccario.com/
 Tags: lead, downloads, email capture, forms, gdpr
 Requires at least: 6.7
-Tested up to: 6.8
+Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,7 +64,7 @@ Clean, responsive forms that match your site's design and convert visitors into 
 * **Email Collection**: Build a database of interested prospects
 * **Conversion Metrics**: Track success rates and optimize performance
 * **Search & Filter**: Find specific records quickly
-* **Export Capabilities**: Access your data when you need it
+* **CSV Export**: Download your full lead list (or just your search results) as a CSV file, ready for Excel, Google Sheets, or your email marketing tool
 
 ### Administrative Power
 * **Clean Dashboard**: Overview of all your lead magnets and performance
@@ -154,12 +154,15 @@ Make it your own with these parameters:
 * Time-based performance data
 
 **Export & Analysis:**
-* Search records by email or filename
-* Filter by date ranges
+* Export the download history to CSV with one click from the History page
+* Search records by email or filename, then export only the matching results
 * Monitor conversion trends
 * Identify best-performing content
 
 == Frequently Asked Questions ==
+
+= Can I export my leads? =
+Yes. Go to Lead Magnet → History and click "Export all (CSV)". If you search first, the button becomes "Export results (CSV)" and exports only the matching records. The CSV includes email, file, submission date, download date, and status, and opens directly in Excel or Google Sheets.
 
 = How secure are my files? =
 Extremely secure. Files are stored in a protected directory with server-level access controls that prevent direct URL access. Only users with valid download keys can access files.
@@ -193,6 +196,16 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 
 == Changelog ==
 
+= 1.2.0 =
+* Added CSV export of the download history (respects the current search)
+* Admin dashboard cards now use the full page width
+* Tested with WordPress 7.1
+* Security: the timezone setting is validated (an invalid value can no longer break pages showing the form)
+* Security: shortcode file paths are checked to stay inside the protected folder
+* Security: History search treats "%" and "_" literally
+* Fixed: the "Download File" button in History (admins can download a record's file without affecting the statistics)
+* Fixed: the form button no longer stays on "Processing..." after an error
+
 = 1.1.1 =
 * Make the plugin complaint with the WordPress coding standard
 * Fix issues after first volunteer's review
@@ -213,6 +226,9 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 * Basic analytics tracking
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Adds CSV export of the download history and confirms compatibility with WordPress 7.1.
 
 = 1.1.0 =
 Major update with advanced scheduling features and a comprehensive admin dashboard.

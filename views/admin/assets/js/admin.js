@@ -106,3 +106,123 @@ jQuery( document ).ready(
 		);
 	}
 );
+jQuery( document ).ready(
+	function ($) {
+		// Timezone search: filters the timezone dropdown as the user types.
+		const select = $( 'select[name="timezone"]' );
+		if ( ! select.length) {
+			return;
+		}
+
+		// Keep the full list; options are rebuilt on each search (Safari ignores hidden options).
+		const allOptions = select.find( 'option' ).map(
+			function () {
+				return { value: this.value, text: $( this ).text() };
+			}
+		).get();
+
+		const search = $( '<input type="search" class="lml-timezone-search" autocomplete="off">' )
+			.attr( 'placeholder', 'Search timezones, e.g. Rome or New York' )
+			.attr( 'aria-label', 'Search timezones' );
+		const empty  = $( '<p class="lml-timezone-empty" aria-live="polite"></p>' ).hide();
+
+		select.before( search ).after( empty );
+
+		function render(query) {
+			const current = select.val();
+			const needle  = query.trim().toLowerCase().replace( /\s+/g, '_' );
+			let matches   = allOptions.filter(
+				function (option) {
+					return '' === needle || option.text.toLowerCase().includes( needle );
+				}
+			);
+
+			// Cities starting with the query come first ("tok" → Asia/Tokyo before Antarctica/Vostok).
+			if ('' !== needle) {
+				const startsWith = function (option) {
+					const city = option.text.toLowerCase().split( '/' ).pop();
+					return city.startsWith( needle ) || option.text.toLowerCase().startsWith( needle ) ? 0 : 1;
+				};
+				matches.sort(
+					function (a, b) {
+						return startsWith( a ) - startsWith( b );
+					}
+				);
+			}
+
+			empty.toggle( 0 === matches.length ).text( 0 === matches.length ? 'No matching timezones.' : '' );
+
+			// Never leave the select empty: keep the saved choice when nothing matches.
+			if ( ! matches.length) {
+				matches = allOptions.filter(
+					function (option) {
+						return option.value === current;
+					}
+				);
+			}
+
+			select.empty();
+			matches.forEach(
+				function (option) {
+					select.append( $( '<option>' ).val( option.value ).text( option.text ) );
+				}
+			);
+
+			const stillThere = matches.some(
+				function (option) {
+					return option.value === current;
+				}
+			);
+			select.val( stillThere ? current : matches[0].value );
+
+			// Show the results as an open list while searching.
+			if ( '' !== needle && matches.length > 1) {
+				select.attr( 'size', Math.min( matches.length, 8 ) );
+			} else {
+				select.removeAttr( 'size' );
+			}
+		}
+
+		search.on(
+			'input',
+			function () {
+				render( this.value );
+			}
+		);
+
+		// Enter picks the highlighted timezone instead of submitting the form.
+		search.on(
+			'keydown',
+			function (event) {
+				if ('Enter' === event.key) {
+					event.preventDefault();
+					search.val( '' );
+					render( '' );
+				} else if ('ArrowDown' === event.key && select.attr( 'size' )) {
+					event.preventDefault();
+					select.trigger( 'focus' );
+				}
+			}
+		);
+
+		// Clicking a result (or Enter on it) closes the list and keeps the choice.
+		function pick() {
+			if (select.attr( 'size' )) {
+				search.val( '' );
+				render( '' );
+				search.trigger( 'focus' );
+			}
+		}
+
+		select.on( 'click', pick );
+		select.on(
+			'keydown',
+			function (event) {
+				if ('Enter' === event.key) {
+					event.preventDefault();
+					pick();
+				}
+			}
+		);
+	}
+);
