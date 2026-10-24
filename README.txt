@@ -241,7 +241,7 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 == Upgrade Notice ==
 
 = 1.3.0 =
-Important security update for sites on Nginx and other servers that ignore .htaccess. Files are moved to a private folder automatically; nothing to change in your shortcodes. If your theme checks for files in wp-content/uploads/lead-magnet-files/ directly, switch it to lead_magnet_locker_file_exists() first. Note: after updating, downgrading to 1.2.x or earlier will show "File not found" (files live in the new folder). To stay downgradable, add define( 'LML_DISABLE_STORAGE_MIGRATION', true ); to wp-config.php before updating.
+Security update for Nginx and similar servers: files move to a private folder automatically, shortcodes keep working. Themes that check uploads/lead-magnet-files/ directly should use lead_magnet_locker_file_exists(). To keep downgrades to 1.2.x possible, see LML_DISABLE_STORAGE_MIGRATION.
 
 = 1.2.0 =
 Adds CSV export of the download history and confirms compatibility with WordPress 7.1.
