@@ -32,6 +32,25 @@ class LeadMagnetLockerDownloader {
 	private string $download_table_name = '';
 
 	/**
+	 * Protected file storage.
+	 *
+	 * @var LeadMagnetLockerStorage
+	 */
+	private LeadMagnetLockerStorage $storage;
+
+	/**
+	 * Set the protected file storage.
+	 *
+	 * @param LeadMagnetLockerStorage $storage Storage service.
+	 * @return static
+	 */
+	public function set_storage( LeadMagnetLockerStorage $storage ): static {
+		$this->storage = $storage;
+
+		return $this;
+	}
+
+	/**
 	 * Set the downloads table name.
 	 *
 	 * @param string $download_table_name Downloads table name (prefixed).
@@ -78,10 +97,9 @@ class LeadMagnetLockerDownloader {
 		}
 
 		// Check if a file exists.
-		$upload_dir = wp_upload_dir();
-		$file_path  = $upload_dir['basedir'] . '/lead-magnet-files/' . $record->file_name;
+		$file_path = $this->storage->path( (string) $record->file_name );
 
-		if ( ! file_exists( $file_path ) ) {
+		if ( null === $file_path ) {
 			wp_die( 'File not found.' );
 		}
 
@@ -145,10 +163,9 @@ class LeadMagnetLockerDownloader {
 			wp_die( esc_html__( 'Invalid download record.', 'lead-magnet-locker' ) );
 		}
 
-		$upload_dir = wp_upload_dir();
-		$file_path  = $upload_dir['basedir'] . '/lead-magnet-files/' . $record->file_name;
+		$file_path = $this->storage->path( (string) $record->file_name );
 
-		if ( ! file_exists( $file_path ) ) {
+		if ( null === $file_path ) {
 			wp_die( esc_html__( 'File not found.', 'lead-magnet-locker' ) );
 		}
 

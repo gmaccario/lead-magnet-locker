@@ -31,7 +31,8 @@ jQuery( document ).ready(
 						data: {
 							action: 'leadmalo_submit_email',
 							email: form.find( 'input[name="email"]' ).val(),
-							file: form.find( 'input[name="file"]' ).val(),
+							lmf: form.find( 'input[name="lmf"]' ).val() || '',
+							file: form.find( 'input[name="file"]' ).val() || '', // Pages cached before 1.3.0.
 							nonce: lead_magnet_ajax.nonce
 						},
 						success: function (response) {

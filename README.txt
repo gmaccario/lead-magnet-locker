@@ -1,11 +1,11 @@
 === Lead Magnet Locker ===
 Contributors: gmaccario
 Donate link: https://www.giuseppemaccario.com/
-Tags: lead, downloads, email capture, forms, gdpr
+Tags: lead magnet, downloads, email capture, forms, lead generation
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,7 +22,7 @@ Unlike other complex lead generation tools, Lead Magnet Locker focuses on doing 
 ### Why Choose Lead Magnet Locker?
 
 #### Security-First Approach
-Your files are stored in a protected directory that prevents direct access. Only users who provide their email address receive a unique, time-tracked download link.
+Your files are stored in a private, randomly named folder that cannot be reached by direct URL, on Apache, Nginx and other servers alike. The public form never reveals the file name, and only users who provide their email address receive a unique, trackable download link.
 
 #### Dead Simple Setup
 Install, upload your files, add a shortcode. That's it. No complicated configurations or technical knowledge required.
@@ -47,7 +47,7 @@ Clean, responsive forms that match your site's design and convert visitors into 
 == Features ==
 
 ### Core Functionality
-* **Secure File Protection**: Files stored in protected directories with server-level access control
+* **Secure File Protection**: Files stored in a private, randomly named folder with server-level access rules; protected on Apache, Nginx, and other servers
 * **Email Validation**: Built-in verification ensures you collect valid email addresses
 * **Unique Download Links**: Every download gets a secure, trackable URL
 * **Responsive Design**: Forms look great on desktop, tablet, and mobile devices
@@ -107,7 +107,7 @@ Make it your own with these parameters:
 ```
 
 **Available Parameters:**
-* `file` (required): Filename in your `lead-magnet-files` directory
+* `file` (required): Name of a file uploaded on the Lead Magnet admin page, exactly as shown in the Manage Files list
 * `title`: Custom headline for your form
 * `description`: Compelling description of your offer
 * `button_text`: Call-to-action button text
@@ -165,7 +165,11 @@ Make it your own with these parameters:
 Yes. Go to Lead Magnet → History and click "Export all (CSV)". If you search first, the button becomes "Export results (CSV)" and exports only the matching records. The CSV includes email, file, submission date, download date, and status, and opens directly in Excel or Google Sheets.
 
 = How secure are my files? =
-Extremely secure. Files are stored in a protected directory with server-level access controls that prevent direct URL access. Only users with valid download keys can access files.
+Files are stored in a private, randomly named folder that is never shown on your site, protected by server rules and empty index files. Downloads are streamed through WordPress, and only users with a valid download link can get a file. The public form sends an opaque token instead of the file name.
+
+= Are my files safe on Nginx? =
+Yes, since 1.3.0. Nginx ignores .htaccess files, so earlier versions relied on the folder rules alone. Files now live in a secret folder whose URL cannot be guessed. For extra protection you can also block the folder in your Nginx configuration:
+`location ^~ /wp-content/uploads/lead-magnet-files/ { deny all; }`
 
 = Can I customize the form appearance? =
 Yes. The plugin includes clean default styling that adapts to most themes. For advanced customization, you can override the CSS styles in your theme.
@@ -195,6 +199,15 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 4. Analytics & reporting view
 
 == Changelog ==
+
+= 1.3.0 =
+* Security: files are now stored in a private, randomly named folder, so they cannot be downloaded by direct URL even on servers that ignore .htaccess (Nginx, Caddy, IIS)
+* Security: the public form no longer reveals the file name (it sends an opaque token)
+* Security: the protected folders use Apache 2.4 rules (with 2.2 fallback) and empty index files to block directory listings
+* Existing files are moved automatically on update; shortcodes, download links and statistics keep working unchanged
+* Admins see a notice if a file cannot be moved (e.g. folder permissions); the move is retried automatically
+* Shortcode error messages (e.g. file not found) are shown to administrators only; visitors see nothing instead of a technical message
+* New developer function lead_magnet_locker_file_exists() for themes that need to know whether a file is available (do not check paths under uploads/ directly)
 
 = 1.2.0 =
 * Added CSV export of the download history (respects the current search)
@@ -227,6 +240,9 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 
 == Upgrade Notice ==
 
+= 1.3.0 =
+Important security update for sites on Nginx and other servers that ignore .htaccess. Files are moved to a private folder automatically; nothing to change in your shortcodes. If your theme checks for files in wp-content/uploads/lead-magnet-files/ directly, switch it to lead_magnet_locker_file_exists() first. Note: after updating, downgrading to 1.2.x or earlier will show "File not found" (files live in the new folder). To stay downgradable, add define( 'LML_DISABLE_STORAGE_MIGRATION', true ); to wp-config.php before updating.
+
 = 1.2.0 =
 Adds CSV export of the download history and confirms compatibility with WordPress 7.1.
 
@@ -235,14 +251,21 @@ Major update with advanced scheduling features and a comprehensive admin dashboa
 
 == Frequently Used Hooks ==
 * `lead_magnet_max_file_size` — Filter the max allowed upload size (in bytes).
+* `lead_magnet_accept_legacy_file_field` — Filter (bool, default `true`). Accept the pre-1.3.0 `file` form field so pages cached before the update keep working. Return `false` once your page cache has been cleared.
+
+== Developer Functions ==
+* `lead_magnet_locker_file_exists( $file )` — Returns `true` when a lead magnet file (the shortcode's `file` value) is available. Use it instead of checking a path under `wp-content/uploads/`: since 1.3.0 files live in a private folder. Example: `if ( function_exists( 'lead_magnet_locker_file_exists' ) && lead_magnet_locker_file_exists( 'guide.pdf' ) ) { ... }`
+
+== Configuration Constants ==
+* `LML_DISABLE_STORAGE_MIGRATION` — Define as `true` in `wp-config.php` to keep files in the pre-1.3.0 folder (no private folder, no migration). Only needed if you must stay able to downgrade to 1.2.x; it removes the extra protection on Nginx.
 
 == Privacy ==
 Lead Magnet Locker is designed with privacy in mind:
-* Email addresses are stored securely in your WordPress database.
+* Email addresses are stored in your own WordPress database.
 * No data is transmitted to external services.
-* You maintain complete control over subscriber information.
-* Compatible with GDPR and privacy regulations.
-* Includes proper data handling practices.
+* You maintain complete control over subscriber information: search, export (CSV), and delete records from the History page.
+
+Lead Magnet Locker collects personal data (email addresses). Depending on where you and your visitors are, laws such as the GDPR may require you to inform visitors and obtain their consent; make sure your privacy policy covers this data. The plugin does not yet add a consent checkbox or integrate with the WordPress personal data export/erase tools.
 
 == Credits ==
 Developed for the WordPress community by G.Maccario. Special thanks to all users who provided feedback and feature requests.

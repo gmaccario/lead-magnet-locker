@@ -48,12 +48,14 @@ class LeadMagnetLockerPluginBootstrap {
 	 * @param LeadMagnetLockerFileUploader    $file_uploader    Uploader service for admin file ops.
 	 * @param LeadMagnetLockerDownloader      $downloader       Public downloader handler.
 	 * @param LeadMagnetLockerHistoryExporter $history_exporter Download history CSV exporter.
+	 * @param LeadMagnetLockerStorage         $storage          Protected file storage.
 	 */
 	public function __construct(
 		private readonly LeadMagnetLocker $plugin,
 		private readonly LeadMagnetLockerFileUploader $file_uploader,
 		private readonly LeadMagnetLockerDownloader $downloader,
 		private readonly LeadMagnetLockerHistoryExporter $history_exporter,
+		private readonly LeadMagnetLockerStorage $storage,
 	) {
 	}
 
@@ -131,6 +133,7 @@ class LeadMagnetLockerPluginBootstrap {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'admin_init' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
+		add_action( 'admin_notices', array( $this, 'storage_notice' ) );
 		add_action( 'wp_ajax_leadmalo_delete_download_record', array( $this->plugin, 'leadmalo_delete_download_record' ) );
 		add_action( 'admin_post_' . LeadMagnetLockerHistoryExporter::ACTION, array( $this->history_exporter, 'handle_export' ) );
 		add_action( 'admin_post_' . LeadMagnetLockerDownloader::ADMIN_ACTION, array( $this->downloader, 'handle_admin_download' ) );
@@ -317,7 +320,7 @@ class LeadMagnetLockerPluginBootstrap {
 			'leadmalo-public',
 			plugin_dir_url( $this->main_file ) . 'views/public/assets/js/public.js',
 			array( 'jquery' ),
-			'1.0',
+			$this->asset_version( 'views/public/assets/js/public.js' ),
 			true
 		);
 		wp_localize_script(
@@ -337,26 +340,44 @@ class LeadMagnetLockerPluginBootstrap {
 	 * @return void
 	 */
 	public function init(): void {
-		// Create uploads directory for secure files.
-		$this->create_secure_directory();
+		// Create and harden the storage folders, then move legacy files into the private one.
+		$this->storage->ensure_directories();
+		$this->storage->maybe_migrate();
 	}
 
 	/**
-	 * Create the secure uploads directory (if missing).
+	 * Warn admins, on the plugin pages, about files that could not be moved to protected storage.
 	 *
 	 * @return void
 	 */
-	private function create_secure_directory(): void {
-		$upload_dir = wp_upload_dir();
-		$secure_dir = $upload_dir['basedir'] . '/lead-magnet-files/';
-
-		if ( ! file_exists( $secure_dir ) ) {
-			wp_mkdir_p( $secure_dir );
-
-			// Create .htaccess to prevent direct access.
-			$htaccess_content = "Order deny,allow\nDeny from all";
-			file_put_contents( $secure_dir . '.htaccess', $htaccess_content );
+	public function storage_notice(): void {
+		$screen = get_current_screen();
+		if ( ! $screen || ! str_contains( (string) $screen->id, 'lead-magnet' ) || ! current_user_can( 'manage_options' ) ) {
+			return;
 		}
+
+		$unprotected = $this->storage->unprotected_files();
+		if ( empty( $unprotected ) ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning"><p><strong>%1$s</strong> %2$s <code>%3$s</code></p></div>',
+			esc_html__( 'Lead Magnet Locker:', 'lead-magnet-locker' ),
+			esc_html(
+				sprintf(
+					/* translators: %d: number of files */
+					_n(
+						'%d file could not be moved to protected storage and may be reachable by direct URL on servers that ignore .htaccess (e.g. Nginx). Check the folder permissions; the move is retried automatically.',
+						'%d files could not be moved to protected storage and may be reachable by direct URL on servers that ignore .htaccess (e.g. Nginx). Check the folder permissions; the move is retried automatically.',
+						count( $unprotected ),
+						'lead-magnet-locker'
+					),
+					count( $unprotected )
+				)
+			),
+			esc_html( implode( ', ', $unprotected ) )
+		);
 	}
 
 	/**

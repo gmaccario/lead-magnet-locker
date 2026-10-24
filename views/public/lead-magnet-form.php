@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				name="email"
 				placeholder="Enter your email address"
 				required>
-		<input type="hidden" name="file" value="<?php echo esc_attr( $atts['file'] ); ?>">
+		<input type="hidden" name="lmf" value="<?php echo esc_attr( $file_token ); ?>">
 		<button type="submit"><?php echo esc_html( $atts['button_text'] ); ?></button>
 	</form>
 </div>

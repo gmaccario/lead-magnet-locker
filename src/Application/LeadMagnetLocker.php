@@ -17,6 +17,7 @@ use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerDownloader;
 use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerFileUploader;
 use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerHistoryExporter;
 use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerPluginBootstrap;
+use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerStorage;
 
 /**
  * Main plugin class.
@@ -54,6 +55,13 @@ class LeadMagnetLocker {
 	private LeadMagnetLockerDownloader $downloader;
 
 	/**
+	 * Protected file storage service.
+	 *
+	 * @var LeadMagnetLockerStorage
+	 */
+	private LeadMagnetLockerStorage $storage;
+
+	/**
 	 * Download history CSV exporter service.
 	 *
 	 * @var LeadMagnetLockerHistoryExporter
@@ -69,17 +77,21 @@ class LeadMagnetLocker {
 		$this->download_table_name = $wpdb->prefix . 'lead_magnet_downloads';
 		$this->settings_table_name = $wpdb->prefix . 'lead_magnet_settings';
 
+		$this->storage = new LeadMagnetLockerStorage();
+
 		$this->file_uploader = ( new LeadMagnetLockerFileUploader() )
-			->set_tables_name( $this->download_table_name );
+			->set_tables_name( $this->download_table_name )
+			->set_storage( $this->storage );
 
 		$this->downloader = ( new LeadMagnetLockerDownloader() )
-			->set_tables_name( $this->download_table_name );
+			->set_tables_name( $this->download_table_name )
+			->set_storage( $this->storage );
 
 		$this->history_exporter = ( new LeadMagnetLockerHistoryExporter() )
 			->set_tables_name( $this->download_table_name );
 
 		// Hook into WordPress.
-		( new LeadMagnetLockerPluginBootstrap( $this, $this->file_uploader, $this->downloader, $this->history_exporter ) )
+		( new LeadMagnetLockerPluginBootstrap( $this, $this->file_uploader, $this->downloader, $this->history_exporter, $this->storage ) )
 			->set_tables_name( $this->download_table_name, $this->settings_table_name )
 			->set_main_file( LML_PLUGIN_FILE )
 			->hook_into_wp();
@@ -247,20 +259,23 @@ class LeadMagnetLocker {
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$completed_downloads = $wpdb->get_var( "SELECT COUNT(*) FROM {$this->download_table_name} WHERE downloaded_at IS NOT NULL" );
 
+		// Protect files added to the legacy folder since the last migration (e.g. via FTP).
+		if ( $this->storage->unprotected_files() ) {
+			$this->storage->migrate();
+		}
+
 		// Get uploaded files.
-		$upload_dir = wp_upload_dir();
-		$secure_dir = $upload_dir['basedir'] . '/lead-magnet-files/';
-		$files      = array();
-		if ( is_dir( $secure_dir ) ) {
-			$all_files = array_diff( scandir( $secure_dir ), array( '.', '..', '.htaccess' ) );
-			foreach ( $all_files as $file ) {
-				$file_path = $secure_dir . $file;
-				$files[]   = array(
-					'name'     => $file,
-					'size'     => $this->file_uploader->format_file_size( filesize( $file_path ) ),
-					'modified' => gmdate( 'Y-m-d H:i:s', filemtime( $file_path ) ), // Use gmdate instead of date.
-				);
+		$files = array();
+		foreach ( $this->storage->list_files() as $file ) {
+			$file_path = $this->storage->path( $file );
+			if ( null === $file_path ) {
+				continue;
 			}
+			$files[] = array(
+				'name'     => $file,
+				'size'     => $this->file_uploader->format_file_size( (int) filesize( $file_path ) ),
+				'modified' => gmdate( 'Y-m-d H:i:s', (int) filemtime( $file_path ) ), // Use gmdate instead of date.
+			);
 		}
 
 		$view = LML_PLUGIN_DIR . 'views/admin/admin-page.php';
@@ -395,6 +410,22 @@ class LeadMagnetLocker {
 	}
 
 	/**
+	 * Shortcode error message, shown to administrators only.
+	 *
+	 * Visitors get nothing instead of a technical message in the middle of the content.
+	 *
+	 * @param string $message Error message.
+	 * @return string HTML for administrators, empty string for everyone else.
+	 */
+	private function shortcode_error( string $message ): string {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return '';
+		}
+
+		return '<p class="lead-magnet-error-admin"><strong>Lead Magnet Locker:</strong> ' . esc_html( $message ) . ' <em>(' . esc_html__( 'Only administrators see this message.', 'lead-magnet-locker' ) . ')</em></p>';
+	}
+
+	/**
 	 * Display the email capture form via shortcode
 	 * Usage: [lead_magnet file="your-file.pdf" title="Download Free Guide"]
 	 *
@@ -420,18 +451,17 @@ class LeadMagnetLocker {
 		);
 
 		if ( empty( $atts['file'] ) ) {
-			return '<p><strong>Error:</strong> Please specify a file in the shortcode.</p>';
+			return $this->shortcode_error( 'Please specify a file in the shortcode.' );
 		}
 
-		// Check if a file exists in a secure directory.
-		// Resolve the real path and make sure it stays inside the secure directory (blocks "../").
-		$upload_dir = wp_upload_dir();
-		$secure_dir = realpath( $upload_dir['basedir'] . '/lead-magnet-files' );
-		$file_path  = realpath( $upload_dir['basedir'] . '/lead-magnet-files/' . $atts['file'] );
-
-		if ( false === $secure_dir || false === $file_path || ! str_starts_with( $file_path, $secure_dir . DIRECTORY_SEPARATOR ) || ! is_file( $file_path ) ) {
-			return '<p><strong>Error:</strong> File not found. Please upload the file first from the WordPress admin dashboard</p>';
+		// Resolve the file inside the protected storage (blocks "../").
+		$file_path = $this->storage->path( (string) $atts['file'] );
+		if ( null === $file_path ) {
+			return $this->shortcode_error( 'File not found. Please upload the file first from the WordPress admin dashboard.' );
 		}
+
+		// The form carries an opaque token, never the file name.
+		$file_token = $this->storage->token( basename( $file_path ) );
 
 		ob_start();
 
@@ -439,8 +469,8 @@ class LeadMagnetLocker {
 		if ( is_readable( $view ) ) {
 			include_once $view;
 		} else {
-			// Fails safely in admin with a helpful message.
-			echo '<div class="notice notice-error"><p>' . esc_html__( 'Missing admin page view file.', 'lead-magnet-locker' ) . '</p></div>';
+			// Fails safely with a helpful message for admins only.
+			echo $this->shortcode_error( 'Missing form view file.' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in shortcode_error().
 		}
 
 		return ob_get_clean();
@@ -466,7 +496,19 @@ class LeadMagnetLocker {
 
 		// Validate and sanitize form inputs.
 		$email = isset( $_POST['email'] ) ? wp_unslash( sanitize_email( $_POST['email'] ) ) : '';
-		$file  = isset( $_POST['file'] ) ? wp_unslash( sanitize_file_name( $_POST['file'] ) ) : '';
+		$token = isset( $_POST['lmf'] ) ? sanitize_text_field( wp_unslash( $_POST['lmf'] ) ) : '';
+		$file  = '' !== $token ? (string) $this->storage->name_from_token( $token ) : '';
+
+		/**
+		 * Accept the pre-1.3.0 "file" field so pages cached before the update keep working.
+		 *
+		 * Safe once files live in the private folder: knowing a name gives no URL access.
+		 *
+		 * @param bool $accept Whether to accept the legacy field. Default true.
+		 */
+		if ( '' === $file && '' === $token && isset( $_POST['file'] ) && apply_filters( 'lead_magnet_accept_legacy_file_field', true ) ) {
+			$file = sanitize_file_name( wp_unslash( $_POST['file'] ) );
+		}
 
 		// Validate email.
 		if ( ! is_email( $email ) ) {
@@ -474,12 +516,11 @@ class LeadMagnetLocker {
 		}
 
 		// Check if a file exists.
-		$upload_dir = wp_upload_dir();
-		$file_path  = $upload_dir['basedir'] . '/lead-magnet-files/' . $file;
-
-		if ( ! file_exists( $file_path ) ) {
+		$file_path = '' !== $file ? $this->storage->path( $file ) : null;
+		if ( null === $file_path ) {
 			wp_send_json_error( array( 'message' => 'File not found.' ) );
 		}
+		$file = basename( $file_path );
 
 		// Generate unique download key.
 		$download_key = wp_generate_password( 32, false );

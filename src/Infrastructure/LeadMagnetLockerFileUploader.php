@@ -25,6 +25,25 @@ class LeadMagnetLockerFileUploader {
 	private string $download_table_name = '';
 
 	/**
+	 * Protected file storage.
+	 *
+	 * @var LeadMagnetLockerStorage
+	 */
+	private LeadMagnetLockerStorage $storage;
+
+	/**
+	 * Set the protected file storage.
+	 *
+	 * @param LeadMagnetLockerStorage $storage Storage service.
+	 * @return static
+	 */
+	public function set_storage( LeadMagnetLockerStorage $storage ): static {
+		$this->storage = $storage;
+
+		return $this;
+	}
+
+	/**
 	 * Set the downloads table name used by this service.
 	 *
 	 * @param string $download_table_name Downloads table name (prefixed).
@@ -176,7 +195,8 @@ class LeadMagnetLockerFileUploader {
 		}
 
 		// Ensure the secure directory exists and is hardened.
-		$this->create_secure_directory();
+		$this->storage->ensure_directories();
+		$subdir = $this->storage->upload_subdir();
 
 		// Temporarily override upload_dir to our secure subdirectory.
 		/**
@@ -185,8 +205,7 @@ class LeadMagnetLockerFileUploader {
 		 * @param array $dirs Upload directory array.
 		 * @return array      Modified directories array.
 		 */
-		$filter = function ( array $dirs ): array {
-			$subdir         = '/lead-magnet-files';
+		$filter = function ( array $dirs ) use ( $subdir ): array {
 			$dirs['path']   = $dirs['basedir'] . $subdir;
 			$dirs['url']    = $dirs['baseurl'] . $subdir; // we won't expose the URL, but keep structure consistent.
 			$dirs['subdir'] = $subdir;
@@ -294,10 +313,9 @@ class LeadMagnetLockerFileUploader {
 			);
 		}
 
-		$upload_dir = wp_upload_dir();
-		$file_path  = trailingslashit( $upload_dir['basedir'] ) . 'lead-magnet-files/' . $filename;
+		$file_path = $this->storage->path( $filename );
 
-		if ( ! file_exists( $file_path ) ) {
+		if ( null === $file_path ) {
 			return array(
 				'success' => false,
 				'message' => esc_html__( 'File not found.', 'lead-magnet-locker' ),
@@ -368,30 +386,6 @@ class LeadMagnetLockerFileUploader {
 		);
 	}
 
-
-	/**
-	 * Create a secure directory for file storage
-	 *
-	 * @return void
-	 */
-	private function create_secure_directory(): void {
-		$upload_dir = wp_upload_dir();
-		$secure_dir = trailingslashit( $upload_dir['basedir'] ) . 'lead-magnet-files/';
-
-		if ( ! file_exists( $secure_dir ) ) {
-			wp_mkdir_p( $secure_dir );
-
-			// Create .htaccess to prevent direct access (Apache).
-			$htaccess_content = "Order deny,allow\nDeny from all\n";
-            // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
-			file_put_contents( $secure_dir . '.htaccess', $htaccess_content );
-
-			// Create index.php for additional security.
-			$index_content = "<?php\n// Silence is golden.\n";
-            // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
-			file_put_contents( $secure_dir . 'index.php', $index_content );
-		}
-	}
 
 	/**
 	 * Validate and normalize a table name. Returns sanitized table name or empty string on failure.
