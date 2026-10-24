@@ -14,11 +14,11 @@
       "dealerdirect/phpcodesniffer-composer-installer": true
     }
   },
-  "require-dev": {
-    "wp-coding-standards/wpcs": "^3.0"
-  },
   "scripts": {
     "lint": "phpcs --standard=phpcs.xml",
     "fix": "phpcbf --standard=phpcs.xml"
+  },
+  "require-dev": {
+    "wp-coding-standards/wpcs": "^3.2"
   }
 }
