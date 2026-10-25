@@ -9,6 +9,21 @@
 
 jQuery( document ).ready(
 	function ($) {
+		const settings = window.lead_magnet_ajax || {};
+		const i18n     = $.extend(
+			{
+				processing: 'Processing...',
+				download: 'Click here to download',
+				error: 'An error occurred. Please try again.'
+			},
+			settings.i18n
+		);
+
+		// Messages are inserted as text, never as HTML.
+		function message(type, text) {
+			return $( '<div>' ).addClass( 'lead-magnet-message lead-magnet-' + type ).text( text );
+		}
+
 		$( '.lead-magnet-email-form' ).on(
 			'submit',
 			function (e) {
@@ -21,38 +36,41 @@ jQuery( document ).ready(
 				const buttonText   = submitButton.text();
 
 				// Show loading state.
-				submitButton.text( 'Processing...' ).prop( 'disabled', true );
+				submitButton.text( i18n.processing ).prop( 'disabled', true );
 				messagesDiv.empty();
 
 				$.ajax(
 					{
-						url: lead_magnet_ajax.ajax_url,
+						url: settings.ajax_url,
 						type: 'POST',
 						data: {
 							action: 'leadmalo_submit_email',
 							email: form.find( 'input[name="email"]' ).val(),
 							lmf: form.find( 'input[name="lmf"]' ).val() || '',
 							file: form.find( 'input[name="file"]' ).val() || '', // Pages cached before 1.3.0.
-							nonce: lead_magnet_ajax.nonce
+							nonce: settings.nonce
 						},
 						success: function (response) {
+							// A failed security check answers with plain text, not JSON.
+							if ( ! response || ! response.data) {
+								messagesDiv.append( message( 'error', i18n.error ) );
+								return;
+							}
+
 							if (response.success) {
-								messagesDiv.html(
-									'<div class="lead-magnet-message lead-magnet-success">' +
-									response.data.message +
-									'<br><a href="' + response.data.download_url + '" target="_blank">Click here to download</a>' +
-									'</div>'
+								messagesDiv.append(
+									message( 'success', response.data.message ).append(
+										'<br>',
+										$( '<a target="_blank">' ).attr( 'href', response.data.download_url ).text( i18n.download )
+									)
 								);
 								form.hide();
 							} else {
-								messagesDiv.html(
-									'<div class="lead-magnet-message lead-magnet-error">' +
-									response.data.message + '</div>'
-								);
+								messagesDiv.append( message( 'error', response.data.message ) );
 							}
 						},
 						error: function () {
-							messagesDiv.html( '<div class="lead-magnet-message lead-magnet-error">An error occurred. Please try again.</div>' );
+							messagesDiv.append( message( 'error', i18n.error ) );
 						},
 						complete: function () {
 							submitButton.text( buttonText ).prop( 'disabled', false );

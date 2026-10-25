@@ -1,0 +1,7 @@
+# Files left out of release builds (git archive).
+/.gitattributes export-ignore
+/.gitignore     export-ignore
+/tests          export-ignore
+/tests/**       export-ignore
+/phpunit.xml.dist export-ignore
+/phpstan.neon.dist export-ignore

@@ -31,7 +31,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( ! file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 	// Only log in debug mode, not in production.
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		error_log( 'LeadMagnet - Autoloader file not found at: ' . __DIR__ . '/vendor/autoload.php' );
+		error_log( 'LeadMagnet - Autoloader file not found at: ' . __DIR__ . '/vendor/autoload.php' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- WP_DEBUG only.
 	}
 	return;
 }
@@ -42,7 +42,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 if ( ! class_exists( '\LeadMagnet\Locker\Infrastructure\LeadMagnetLockerPluginBootstrap' ) ) {
 	// Only log in debug mode, not in production.
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		error_log( 'LeadMagnet - Class NOT found by autoloader' );
+		error_log( 'LeadMagnet - Class NOT found by autoloader' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- WP_DEBUG only.
 	}
 	return;
 }
@@ -64,4 +64,4 @@ if ( ! defined( 'LML_PLUGIN_URL' ) ) {
 require_once __DIR__ . '/functions.php';
 
 // Initialize the plugin.
-new LeadMagnetLocker();
+( new LeadMagnetLocker( $GLOBALS['wpdb'], __FILE__, LML_PLUGIN_VERSION ) )->register();

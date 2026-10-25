@@ -26,28 +26,16 @@ class LeadMagnetLockerHistoryExporter {
 	public const ACTION = 'leadmalo_export_history';
 
 	/**
-	 * Fully-qualified downloads table name (with $wpdb->prefix).
+	 * Constructor.
 	 *
-	 * @var string
+	 * @param DownloadRepository $downloads Download records.
 	 */
-	private string $download_table_name = '';
+	public function __construct( private DownloadRepository $downloads ) {}
 
 	/**
-	 * Set the downloads table name.
+	 * Build the export URL, keeping the current search term.
 	 *
-	 * @param string $download_table_name Downloads table name (prefixed).
-	 * @return static
-	 */
-	public function set_tables_name( string $download_table_name ): static {
-		$this->download_table_name = $download_table_name;
-
-		return $this;
-	}
-
-	/**
-	 * Build the export URL, keeping the current search term (if any).
-	 *
-	 * @param string $search Current history search term.
+	 * @param string $search Optional search term.
 	 * @return string Nonce-protected admin-post.php URL.
 	 */
 	public function get_export_url( string $search = '' ): string {
@@ -60,7 +48,7 @@ class LeadMagnetLockerHistoryExporter {
 	}
 
 	/**
-	 * Handle the CSV export request (runs on admin_post_{action}).
+	 * Stream the download history as a CSV file (runs on admin_post_{action}).
 	 *
 	 * @return void
 	 */
@@ -71,35 +59,19 @@ class LeadMagnetLockerHistoryExporter {
 
 		check_admin_referer( self::ACTION );
 
-		$search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
-
-		global $wpdb;
-		if ( '' !== $search ) {
-			$like    = '%' . $wpdb->esc_like( $search ) . '%';
-			$records = $wpdb->get_results(
-				$wpdb->prepare(
-					// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
-					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-					"SELECT * FROM {$this->download_table_name} WHERE email LIKE %s OR file_name LIKE %s ORDER BY created_at DESC",
-					$like,
-					$like
-				)
-			);
-		} else {
-			// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$records = $wpdb->get_results( "SELECT * FROM {$this->download_table_name} ORDER BY created_at DESC" );
-		}
-
-		$filename = 'lead-magnet-history-' . gmdate( 'Y-m-d-His' ) . '.csv';
+		$search  = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+		$records = $this->downloads->search( $search );
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
-		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Disposition: attachment; filename="lead-magnet-history-' . gmdate( 'Y-m-d-His' ) . '.csv"' );
 
 		// Streaming to php://output, not the filesystem.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		$output = fopen( 'php://output', 'w' );
+		if ( false === $output ) {
+			exit;
+		}
 
 		// UTF-8 BOM so spreadsheet apps detect the encoding.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
@@ -107,7 +79,7 @@ class LeadMagnetLockerHistoryExporter {
 
 		$this->write_row( $output, array( 'ID', 'Email', 'File', 'Submitted', 'Downloaded', 'Status' ) );
 
-		foreach ( (array) $records as $record ) {
+		foreach ( $records as $record ) {
 			$this->write_row(
 				$output,
 				array(
@@ -116,7 +88,7 @@ class LeadMagnetLockerHistoryExporter {
 					$record->file_name,
 					$record->created_at,
 					$record->downloaded_at ?? '',
-					$record->downloaded_at ? 'Downloaded' : 'Pending',
+					$record->is_downloaded() ? 'Downloaded' : 'Pending',
 				)
 			);
 		}
@@ -127,10 +99,10 @@ class LeadMagnetLockerHistoryExporter {
 	}
 
 	/**
-	 * Write one CSV row, neutralizing values that spreadsheets would run as formulas.
+	 * Write one CSV row, neutralising values a spreadsheet would run as formulas.
 	 *
-	 * @param resource $output Output stream.
-	 * @param array    $row    Row values.
+	 * @param resource     $output Output stream.
+	 * @param array<mixed> $row    Row values.
 	 * @return void
 	 */
 	private function write_row( $output, array $row ): void {

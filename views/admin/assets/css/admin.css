@@ -200,6 +200,10 @@
 	color: var(--lml-muted);
 }
 
+.lml-settings .lml-panel__header p + p {
+	margin-top: 8px;
+}
+
 .lml-settings .form-table {
 	margin: 0;
 }

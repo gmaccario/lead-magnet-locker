@@ -62,7 +62,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							<input type="file" name="lead_magnet_file" id="lead_magnet_file" accept=".pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.mp3,.mp4">
 							<p class="description">
 								Allowed file types: PDF, ZIP, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG, GIF, TXT, MP3, MP4<br>
-								Maximum file size: <?php echo esc_html( $this->file_uploader->format_file_size( wp_max_upload_size() ) ); ?>
+								Maximum file size: <?php echo esc_html( $max_upload_size ); ?>
 							</p>
 						</td>
 					</tr>

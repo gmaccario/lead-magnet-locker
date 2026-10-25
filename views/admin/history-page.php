@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 	<div class="tablenav top">
 		<div class="alignleft actions">
-			<a href="<?php echo esc_url( $this->history_exporter->get_export_url( $search ) ); ?>" class="button">
+			<a href="<?php echo esc_url( $export_url ); ?>" class="button">
 				<?php echo '' !== $search ? 'Export results (CSV)' : 'Export all (CSV)'; ?>
 			</a>
 		</div>
@@ -69,7 +69,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</td>
 					<td>
 						<button class="button-secondary delete-record" data-id="<?php echo esc_attr( $record->id ); ?>">Delete</button>
-						<a href="<?php echo esc_url( $this->downloader->get_admin_download_url( (int) $record->id ) ); ?>" class="button-secondary">Download File</a>
+						<a href="<?php echo esc_url( $download_urls[ (int) $record->id ] ); ?>" class="button-secondary">Download File</a>
 					</td>
 				</tr>
 			<?php endforeach; ?>
@@ -81,14 +81,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<div class="tablenav bottom">
 			<div class="tablenav-pages">
 				<span class="displaying-num"><?php echo esc_html( $total_items ); ?> items</span>
-				<?php
-				$base_url = admin_url( 'admin.php?page=lead-magnet-history' );
-				if ( ! empty( $search ) ) {
-					$base_url .= '&s=' . urlencode( $search );
-				}
-
-				if ( $page > 1 ) :
-					?>
+				<?php if ( $page > 1 ) : ?>
 					<a class="button" href="<?php echo esc_attr( $base_url ) . '&paged=' . esc_attr( $page - 1 ); ?>">&laquo; Previous</a>
 				<?php endif; ?>
 

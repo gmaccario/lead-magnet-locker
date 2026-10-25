@@ -49,6 +49,16 @@ class LeadMagnetLockerStorage {
 	public const OPTION_LOCK = 'leadmalo_storage_lock';
 
 	/**
+	 * Option holding the timestamp until which the pre-1.3.0 "file" form field is accepted.
+	 */
+	public const OPTION_LEGACY_UNTIL = 'leadmalo_legacy_field_until';
+
+	/**
+	 * How long after the upgrade pages cached with the old form keep working.
+	 */
+	private const LEGACY_FIELD_WINDOW = 30 * 86400;
+
+	/**
 	 * Files that protect a folder and are never treated as lead magnets.
 	 */
 	private const PROTECTION_FILES = array( '.htaccess', 'index.php', 'index.html' );
@@ -214,6 +224,23 @@ class LeadMagnetLockerStorage {
 	}
 
 	/**
+	 * Whether the public form may still name the file directly (the pre-1.3.0 "file" field).
+	 *
+	 * Only pages cached before the upgrade send it, so it is accepted for 30 days
+	 * after files were first moved to the private folder. Fresh installs never
+	 * accept it. Sites that opted out of the migration keep accepting it.
+	 *
+	 * @return bool
+	 */
+	public function accepts_legacy_field(): bool {
+		if ( ! $this->is_private_storage_enabled() ) {
+			return true;
+		}
+
+		return time() < (int) get_option( self::OPTION_LEGACY_UNTIL, 0 );
+	}
+
+	/**
 	 * Run the migration on 'init' when it is still pending and not waiting for a retry.
 	 *
 	 * @return void
@@ -255,6 +282,7 @@ class LeadMagnetLockerStorage {
 			$this->ensure_directories();
 
 			$failed = array();
+			$moved  = 0;
 			foreach ( $this->files_in( $this->base_dir() ) as $name ) {
 				$from = $this->base_dir() . '/' . $name;
 				$to   = $this->private_dir() . '/' . $name;
@@ -264,7 +292,14 @@ class LeadMagnetLockerStorage {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename, WordPress.PHP.NoSilencedErrors.Discouraged
 				if ( file_exists( $to ) || ! @rename( $from, $to ) ) {
 					$failed[] = $name;
+				} else {
+					++$moved;
 				}
+			}
+
+			// First migration after the upgrade moved files: cached pages may still send the old field.
+			if ( $moved > 0 && ! get_option( self::OPTION_MIGRATED ) ) {
+				add_option( self::OPTION_LEGACY_UNTIL, time() + self::LEGACY_FIELD_WINDOW, '', false );
 			}
 
 			if ( empty( $failed ) ) {

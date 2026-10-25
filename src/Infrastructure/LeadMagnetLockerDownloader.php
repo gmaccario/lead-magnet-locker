@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace LeadMagnet\Locker\Infrastructure;
 
+use LeadMagnet\Locker\Domain\FileTypes;
+
 /**
  * Downloader service class.
  *
@@ -25,45 +27,36 @@ class LeadMagnetLockerDownloader {
 	public const ADMIN_ACTION = 'leadmalo_admin_download';
 
 	/**
-	 * Fully-qualified downloads table name (with $wpdb->prefix).
+	 * Constructor.
 	 *
-	 * @var string
+	 * @param LeadMagnetLockerStorage $storage   Protected file storage.
+	 * @param DownloadRepository      $downloads Download records.
 	 */
-	private string $download_table_name = '';
+	public function __construct(
+		private LeadMagnetLockerStorage $storage,
+		private DownloadRepository $downloads
+	) {}
 
 	/**
-	 * Protected file storage.
+	 * Public download link for a record key.
 	 *
-	 * @var LeadMagnetLockerStorage
-	 */
-	private LeadMagnetLockerStorage $storage;
-
-	/**
-	 * Set the protected file storage.
+	 * The nonce is tied to the key, so a link stops working after the nonce lifetime.
 	 *
-	 * @param LeadMagnetLockerStorage $storage Storage service.
-	 * @return static
+	 * @param string $download_key Download key.
+	 * @return string
 	 */
-	public function set_storage( LeadMagnetLockerStorage $storage ): static {
-		$this->storage = $storage;
-
-		return $this;
+	public function get_download_url( string $download_key ): string {
+		return add_query_arg(
+			array(
+				'lead_magnet_download' => $download_key,
+				'lmd-nonce'            => wp_create_nonce( 'lead_magnet_download_' . $download_key ),
+			),
+			home_url( '/' )
+		);
 	}
 
 	/**
-	 * Set the downloads table name.
-	 *
-	 * @param string $download_table_name Downloads table name (prefixed).
-	 * @return static
-	 */
-	public function set_tables_name( string $download_table_name ): static {
-		$this->download_table_name = $download_table_name;
-
-		return $this;
-	}
-
-	/**
-	 * Handle secure file downloads.
+	 * Handle secure file downloads (runs on 'init').
 	 *
 	 * @return void
 	 */
@@ -81,36 +74,17 @@ class LeadMagnetLockerDownloader {
 			exit( 'Forbidden' );
 		}
 
-		// Get download record from a database.
-		global $wpdb;
-		$record = $wpdb->get_row(
-			$wpdb->prepare(
-				// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT * FROM $this->download_table_name WHERE download_key = %s",
-				$download_key
-			)
-		);
-
-		if ( ! $record ) {
-			wp_die( 'Invalid download link.' );
+		$record = $this->downloads->find_by_key( $download_key );
+		if ( null === $record ) {
+			wp_die( esc_html__( 'Invalid download link.', 'lead-magnet-locker' ) );
 		}
 
-		// Check if a file exists.
-		$file_path = $this->storage->path( (string) $record->file_name );
-
+		$file_path = $this->storage->path( $record->file_name );
 		if ( null === $file_path ) {
-			wp_die( 'File not found.' );
+			wp_die( esc_html__( 'File not found.', 'lead-magnet-locker' ) );
 		}
 
-		// Update download timestamp.
-		$wpdb->update(
-			$this->download_table_name,
-			array( 'downloaded_at' => current_time( 'mysql' ) ),
-			array( 'id' => $record->id ),
-			array( '%s' ),
-			array( '%d' )
-		);
+		$this->downloads->mark_downloaded( $record->id );
 
 		$this->serve_file( $file_path );
 	}
@@ -149,22 +123,12 @@ class LeadMagnetLockerDownloader {
 		$record_id = isset( $_GET['record_id'] ) ? absint( $_GET['record_id'] ) : 0;
 		check_admin_referer( self::ADMIN_ACTION . '_' . $record_id );
 
-		global $wpdb;
-		$record = $wpdb->get_row(
-			$wpdb->prepare(
-				// Table names cannot be parameterized, but we ensure it's safe by using wpdb->prefix.
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT * FROM $this->download_table_name WHERE id = %d",
-				$record_id
-			)
-		);
-
-		if ( ! $record ) {
+		$record = $this->downloads->find( $record_id );
+		if ( null === $record ) {
 			wp_die( esc_html__( 'Invalid download record.', 'lead-magnet-locker' ) );
 		}
 
-		$file_path = $this->storage->path( (string) $record->file_name );
-
+		$file_path = $this->storage->path( $record->file_name );
 		if ( null === $file_path ) {
 			wp_die( esc_html__( 'File not found.', 'lead-magnet-locker' ) );
 		}
@@ -176,51 +140,23 @@ class LeadMagnetLockerDownloader {
 	 * Stream a file to the browser as an attachment and stop execution.
 	 *
 	 * @param string $file_path Absolute path to the file.
-	 * @return void
+	 * @return never
 	 */
-	private function serve_file( string $file_path ): void {
-		$file_info = pathinfo( $file_path );
-		$mime_type = $this->get_mime_type( $file_info['extension'] ?? '' );
+	private function serve_file( string $file_path ): never {
+		$name = basename( $file_path );
 
-		header( 'Content-Type: ' . $mime_type );
-		header( 'Content-Disposition: attachment; filename="' . basename( $file_path ) . '"' );
+		header( 'Content-Type: ' . FileTypes::mime_type( $name ) );
+		// Plain name for every client, plus the RFC 6266 form for names with special characters.
+		header( 'Content-Disposition: attachment; filename="' . str_replace( array( '"', '\\' ), '', $name ) . '"; filename*=UTF-8\'\'' . rawurlencode( $name ) );
 		header( 'Content-Length: ' . filesize( $file_path ) );
+		header( 'X-Content-Type-Options: nosniff' );
 		header( 'Cache-Control: no-cache, must-revalidate' );
 		header( 'Pragma: no-cache' );
 		header( 'Expires: 0' );
 
-		// readfile() streams the file directly without loading into memory.
-		// and doesn't require escaping as it's not HTML output.
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+		// Streams the file without loading it into memory; not HTML, so nothing to escape.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 		readfile( $file_path );
 		exit;
-	}
-
-	/**
-	 * Get MIME type based on file extension.
-	 *
-	 * @param string $extension File extension (without leading dot).
-	 * @return string MIME type string for the given extension.
-	 */
-	private function get_mime_type( string $extension ): string {
-		$mime_types = array(
-			'pdf'  => 'application/pdf',
-			'zip'  => 'application/zip',
-			'doc'  => 'application/msword',
-			'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-			'xls'  => 'application/vnd.ms-excel',
-			'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			'ppt'  => 'application/vnd.ms-powerpoint',
-			'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-			'jpg'  => 'image/jpeg',
-			'jpeg' => 'image/jpeg',
-			'png'  => 'image/png',
-			'gif'  => 'image/gif',
-			'txt'  => 'text/plain',
-			'mp3'  => 'audio/mpeg',
-			'mp4'  => 'video/mp4',
-		);
-
-		return $mime_types[ strtolower( $extension ) ] ?? 'application/octet-stream';
 	}
 }

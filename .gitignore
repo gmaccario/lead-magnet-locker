@@ -1,32 +1,13 @@
-
-###> symfony/framework-bundle ###
-/.env
-/.env.local
-/.env.local.php
-/.env.*.local
-/config/secrets/prod/prod.decrypt.private.php
-/public/bundles/
-/var/
+# Composer
 /vendor/
-###< symfony/framework-bundle ###
 
-###> phpunit/phpunit ###
-/phpunit.xml
+# Tests and tools
 /.phpunit.cache/
-###< phpunit/phpunit ###
+/phpunit.xml
+/phpstan.neon
+/tests/E2E/__snapshots__/
 
-###> symfony/asset-mapper ###
-/public/assets/
-/assets/vendor/
-###< symfony/asset-mapper ###
-
-###> friendsofphp/php-cs-fixer ###
-/.php-cs-fixer.php
-/.php-cs-fixer.cache
-###< friendsofphp/php-cs-fixer ###
-
-###> miscellanous ###
+# Miscellaneous
 .DS_Store
 .editorconfig
 .svn/
-###> miscellanous ###

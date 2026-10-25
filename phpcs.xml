@@ -15,7 +15,9 @@
     <exclude-pattern>vendor/*</exclude-pattern>
     <exclude-pattern>node_modules/*</exclude-pattern>
 
+    <!-- Classes follow PSR-4 file names (Composer autoloading). -->
     <rule ref="WordPress.Files.FileName">
         <exclude-pattern>lead-magnet-locker.php</exclude-pattern>
+        <exclude-pattern>src/*</exclude-pattern>
     </rule>
 </ruleset>

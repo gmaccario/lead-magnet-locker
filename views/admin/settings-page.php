@@ -17,7 +17,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 <div class="lead-magnet-locker lml-settings wrap">
 	<h1>Lead Magnet Settings</h1>
 
-	<?php $is_visible = $this->is_form_visible(); ?>
 	<div class="card lml-status <?php echo $is_visible ? 'lml-status--visible' : 'lml-status--hidden'; ?>">
 		<span class="lml-status__icon dashicons <?php echo $is_visible ? 'dashicons-visibility' : 'dashicons-hidden'; ?>" aria-hidden="true"></span>
 		<div class="lml-status__body">
@@ -42,6 +41,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<div class="lml-panel__header">
 				<h2>Schedule</h2>
 				<p>Choose when your lead magnet forms are shown to visitors.</p>
+				<p><strong>This schedule is global:</strong> it applies to every lead magnet form on your site, whatever file it offers. Outside the schedule, all forms show "This download is currently unavailable."</p>
 			</div>
 
 			<table class="form-table">
@@ -52,7 +52,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							<input type="checkbox" name="enable_date_trigger" value="1" <?php checked( $enable_date_trigger, '1' ); ?>>
 							<span class="lml-toggle__label">Enable date/time restrictions for forms</span>
 						</label>
-						<p class="description">When enabled, forms will only be visible between the specified dates and times.</p>
+						<p class="description">When enabled, forms are visible continuously from the start date and time until the end date and time.</p>
 					</td>
 				</tr>
 				<tr>
@@ -66,21 +66,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<th scope="row">End Date</th>
 					<td>
 						<input type="date" name="end_date" value="<?php echo esc_attr( $end_date ); ?>" class="regular-text">
-						<p class="description">Forms will be hidden after this date.</p>
+						<p class="description">Forms will be hidden after this date (at the end time).</p>
 					</td>
 				</tr>
 				<tr>
 					<th scope="row">Start Time</th>
 					<td>
 						<input type="time" name="start_time" value="<?php echo esc_attr( $start_time ); ?>">
-						<p class="description">Daily start time for form visibility.</p>
+						<p class="description">Time on the start date when forms become visible.</p>
 					</td>
 				</tr>
 				<tr>
 					<th scope="row">End Time</th>
 					<td>
 						<input type="time" name="end_time" value="<?php echo esc_attr( $end_time ); ?>">
-						<p class="description">Daily end time for form visibility.</p>
+						<p class="description">Time on the end date after which forms are hidden.</p>
 					</td>
 				</tr>
 				<tr>

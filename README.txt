@@ -55,9 +55,10 @@ Clean, responsive forms that match your site's design and convert visitors into 
 
 ### Advanced Scheduling
 * **Date Range Control**: Set start and end dates for your campaigns
-* **Time-Based Restrictions**: Control daily availability windows
+* **Start and End Times**: Choose the exact time on the start date and on the end date
 * **Timezone Support**: Respects your WordPress timezone settings
 * **Real-Time Status**: See instantly if your forms are currently active
+* **Site-Wide Schedule**: One schedule applies to all your forms at once
 
 ### Comprehensive Analytics
 * **Download Tracking**: Monitor every file request and completion
@@ -134,8 +135,10 @@ Make it your own with these parameters:
 1. Go to **Lead Magnet → Settings**.
 2. Enable **Date & Time Trigger**.
 3. Set your start and end dates.
-4. Configure daily time windows.
+4. Set the time on the start date and on the end date (forms stay visible continuously in between).
 5. Your forms automatically appear and disappear.
+
+The schedule is global: it applies to every lead magnet form on your site, whatever file it offers.
 
 **Use Cases:**
 * Launch week promotions
@@ -208,6 +211,14 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 * Admins see a notice if a file cannot be moved (e.g. folder permissions); the move is retried automatically
 * Shortcode error messages (e.g. file not found) are shown to administrators only; visitors see nothing instead of a technical message
 * New developer function lead_magnet_locker_file_exists() for themes that need to know whether a file is available (do not check paths under uploads/ directly)
+* Security: the old "file" form field (sent by pages cached before the update) is accepted for 30 days after the upgrade, then only the opaque token is
+* Security: downloads send X-Content-Type-Options: nosniff and an encoded file name; form messages are inserted as text
+* Fix: several [lead_magnet] boxes on the same page now all render (only the first one did)
+* Fix: paging through History search results keeps the search
+* Fix: the form shows an error message instead of failing silently when the security check fails (e.g. an outdated cached page)
+* The Settings page and this readme now state that the schedule applies to all forms, and that start and end times apply to the start and end dates (not daily)
+* Front-end texts are translatable
+* Code: rewritten internals (repositories, controllers, typed records) with end-to-end, unit and static-analysis checks; no change to shortcodes, settings, hooks or stored data
 
 = 1.2.0 =
 * Added CSV export of the download history (respects the current search)
@@ -251,7 +262,7 @@ Major update with advanced scheduling features and a comprehensive admin dashboa
 
 == Frequently Used Hooks ==
 * `lead_magnet_max_file_size` — Filter the max allowed upload size (in bytes).
-* `lead_magnet_accept_legacy_file_field` — Filter (bool, default `true`). Accept the pre-1.3.0 `file` form field so pages cached before the update keep working. Return `false` once your page cache has been cleared.
+* `lead_magnet_accept_legacy_file_field` — Filter (bool). Whether to accept the pre-1.3.0 `file` form field, sent by pages cached before the update. Default: `true` for 30 days after the upgrade moved your files (always `true` with `LML_DISABLE_STORAGE_MIGRATION`), `false` otherwise. Return `false` to stop accepting it once your page cache has been cleared, or `true` to keep accepting it.
 
 == Developer Functions ==
 * `lead_magnet_locker_file_exists( $file )` — Returns `true` when a lead magnet file (the shortcode's `file` value) is available. Use it instead of checking a path under `wp-content/uploads/`: since 1.3.0 files live in a private folder. Example: `if ( function_exists( 'lead_magnet_locker_file_exists' ) && lead_magnet_locker_file_exists( 'guide.pdf' ) ) { ... }`

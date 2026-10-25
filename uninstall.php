@@ -92,7 +92,7 @@ function leadmalo_cleanup_site() {
 
     // Delete any related options (the plugin stores settings in a custom table, but be safe)
     delete_option( 'lead_magnet_options' );
-    foreach ( array( 'leadmalo_storage_dir', 'leadmalo_storage_migrated', 'leadmalo_storage_retry_at', 'leadmalo_storage_lock' ) as $option ) {
+    foreach ( array( 'leadmalo_storage_dir', 'leadmalo_storage_migrated', 'leadmalo_storage_retry_at', 'leadmalo_storage_lock', 'leadmalo_legacy_field_until' ) as $option ) {
         delete_option( $option );
     }
 

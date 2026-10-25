@@ -9,16 +9,35 @@
       "LeadMagnet\\Locker\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "LeadMagnet\\Locker\\Tests\\": "tests/"
+    }
+  },
   "config": {
     "allow-plugins": {
       "dealerdirect/phpcodesniffer-composer-installer": true
+    },
+    "platform": {
+      "php": "8.1.20"
     }
   },
   "scripts": {
     "lint": "phpcs --standard=phpcs.xml",
-    "fix": "phpcbf --standard=phpcs.xml"
+    "fix": "phpcbf --standard=phpcs.xml",
+    "analyse": "phpstan analyse --memory-limit=1G",
+    "test": "phpunit --testsuite unit",
+    "test:e2e": "phpunit --testsuite e2e",
+    "qa": [
+      "@lint",
+      "@analyse",
+      "@test"
+    ]
   },
   "require-dev": {
-    "wp-coding-standards/wpcs": "^3.2"
+    "wp-coding-standards/wpcs": "^3.4.1",
+    "phpunit/phpunit": "^10.5",
+    "phpstan/phpstan": "^2.1",
+    "szepeviktor/phpstan-wordpress": "^2.0"
   }
 }
