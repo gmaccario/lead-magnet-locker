@@ -89,7 +89,9 @@ Releases are published to the wordpress.org SVN repository. Files marked `export
 1. Update the version in `lead-magnet-locker.php` (header and `LML_PLUGIN_VERSION`) and `Stable tag` in `README.txt`; add the changelog and upgrade notice.
 2. Run `composer qa` and `composer test:e2e`.
 3. Build: `git archive HEAD | tar -x -C build/` then `composer install --no-dev --optimize-autoloader` in `build/`.
-4. Copy the build to SVN `trunk/`, `svn cp trunk tags/X.Y.Z`, then `svn ci`.
+4. Copy the build to SVN `trunk/` comparing by content (`rsync -a --checksum --delete --exclude .svn build/ trunk/`), then `svn cp trunk tags/X.Y.Z`.
+5. Test the package itself, not the development folder: zip `trunk/` and activate it on a fresh [WordPress Playground](https://playground.wordpress.net/) (minimum and latest WordPress/PHP), and upgrade over the previous release.
+6. `svn ci`.
 
 ## Contributing
 
