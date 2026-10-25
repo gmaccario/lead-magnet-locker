@@ -10,15 +10,16 @@ declare(strict_types=1);
 
 namespace LeadMagnet\Locker\Infrastructure;
 
+use LeadMagnet\Locker\Application\Port\SettingsStore;
 use LeadMagnet\Locker\Domain\Schedule;
 
 // Custom table: no WordPress API or cache layer applies.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 /**
- * Key/value settings store.
+ * Settings in the plugin's own key/value table (wpdb).
  */
-final class SettingsRepository {
+final class SettingsRepository implements SettingsStore {
 
 	/**
 	 * Table name without the prefix.
@@ -142,15 +143,18 @@ final class SettingsRepository {
 	}
 
 	/**
-	 * Store the schedule settings.
+	 * Store the schedule.
 	 *
-	 * @param array<string, string> $values Values keyed by SCHEDULE_KEYS.
+	 * @param Schedule $schedule Schedule.
 	 * @return void
 	 */
-	public function save_schedule( array $values ): void {
-		foreach ( self::SCHEDULE_KEYS as $key ) {
-			$this->set( $key, $values[ $key ] ?? '' );
-		}
+	public function save_schedule( Schedule $schedule ): void {
+		$this->set( 'enable_date_trigger', $schedule->enabled ? '1' : '0' );
+		$this->set( 'start_date', $schedule->start_date );
+		$this->set( 'end_date', $schedule->end_date );
+		$this->set( 'start_time', $schedule->start_time );
+		$this->set( 'end_time', $schedule->end_time );
+		$this->set( 'timezone', $schedule->timezone );
 	}
 
 	/**

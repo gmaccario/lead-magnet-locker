@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-namespace LeadMagnet\Locker\Infrastructure;
+namespace LeadMagnet\Locker\Presentation;
 
 /**
  * Paths, URLs and asset versions, derived from the main plugin file.

@@ -1,9 +1,6 @@
 <?php
 /**
- * Download history CSV exporter for Lead Magnet Locker.
- *
- * Validates the request, fetches the download records (optionally
- * filtered by the history search term), and streams them as CSV.
+ * Download history as CSV (admin-post.php).
  *
  * @package LeadMagnetLocker
  * @since 1.2.0
@@ -11,14 +8,14 @@
 
 declare(strict_types=1);
 
-namespace LeadMagnet\Locker\Infrastructure;
+namespace LeadMagnet\Locker\Presentation;
+
+use LeadMagnet\Locker\Application\Port\DownloadRecords;
 
 /**
- * History exporter service class.
- *
- * Responsible for exporting the download history to a CSV file.
+ * Streams the (optionally searched) history as a CSV file.
  */
-class LeadMagnetLockerHistoryExporter {
+final class HistoryExport {
 
 	/**
 	 * Action name used by admin-post.php and the nonce.
@@ -28,17 +25,17 @@ class LeadMagnetLockerHistoryExporter {
 	/**
 	 * Constructor.
 	 *
-	 * @param DownloadRepository $downloads Download records.
+	 * @param DownloadRecords $records Download records.
 	 */
-	public function __construct( private DownloadRepository $downloads ) {}
+	public function __construct( private DownloadRecords $records ) {}
 
 	/**
-	 * Build the export URL, keeping the current search term.
+	 * Export URL, keeping the current search term.
 	 *
 	 * @param string $search Optional search term.
 	 * @return string Nonce-protected admin-post.php URL.
 	 */
-	public function get_export_url( string $search = '' ): string {
+	public static function url( string $search = '' ): string {
 		$args = array( 'action' => self::ACTION );
 		if ( '' !== $search ) {
 			$args['s'] = $search;
@@ -48,11 +45,11 @@ class LeadMagnetLockerHistoryExporter {
 	}
 
 	/**
-	 * Stream the download history as a CSV file (runs on admin_post_{action}).
+	 * Stream the CSV (runs on admin_post_{action}).
 	 *
 	 * @return void
 	 */
-	public function handle_export(): void {
+	public function handle(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions.', 'lead-magnet-locker' ) );
 		}
@@ -60,7 +57,7 @@ class LeadMagnetLockerHistoryExporter {
 		check_admin_referer( self::ACTION );
 
 		$search  = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
-		$records = $this->downloads->search( $search );
+		$records = $this->records->search( $search );
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );

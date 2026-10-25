@@ -3,17 +3,16 @@
  * The [lead_magnet] shortcode and its front-end assets.
  *
  * @package LeadMagnetLocker
- * @subpackage Application
  * @since 1.3.0
  */
 
 declare(strict_types=1);
 
-namespace LeadMagnet\Locker\Application;
+namespace LeadMagnet\Locker\Presentation;
 
-use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerStorage;
-use LeadMagnet\Locker\Infrastructure\PluginPaths;
-use LeadMagnet\Locker\Infrastructure\SettingsRepository;
+use LeadMagnet\Locker\Application\Port\Clock;
+use LeadMagnet\Locker\Application\Port\FileStorage;
+use LeadMagnet\Locker\Application\Port\SettingsStore;
 
 /**
  * Renders the email capture form.
@@ -28,13 +27,15 @@ final class ShortcodeController {
 	/**
 	 * Constructor.
 	 *
-	 * @param LeadMagnetLockerStorage $storage  Protected file storage.
-	 * @param SettingsRepository      $settings Settings.
-	 * @param PluginPaths             $paths    Plugin files.
+	 * @param FileStorage   $files    File storage.
+	 * @param SettingsStore $settings Settings.
+	 * @param Clock         $clock    Clock.
+	 * @param PluginPaths   $paths    Plugin files.
 	 */
 	public function __construct(
-		private LeadMagnetLockerStorage $storage,
-		private SettingsRepository $settings,
+		private FileStorage $files,
+		private SettingsStore $settings,
+		private Clock $clock,
 		private PluginPaths $paths
 	) {}
 
@@ -47,7 +48,7 @@ final class ShortcodeController {
 	 * @return string
 	 */
 	public function render( array|string $atts ): string {
-		if ( ! $this->settings->schedule()->is_open( current_time( 'mysql' ) ) ) {
+		if ( ! $this->settings->schedule()->is_open( $this->clock->now() ) ) {
 			return '<div class="lead-magnet-unavailable" style="padding: 20px; border: 2px solid #ccc; border-radius: 8px; text-align: center; color: #666;">'
 				. esc_html__( 'This download is currently unavailable.', 'lead-magnet-locker' )
 				. '</div>';
@@ -69,7 +70,7 @@ final class ShortcodeController {
 		}
 
 		// Resolve the file inside the protected storage (blocks "../").
-		$file_path = $this->storage->path( (string) $atts['file'] );
+		$file_path = $this->files->path( (string) $atts['file'] );
 		if ( null === $file_path ) {
 			return $this->error( __( 'File not found. Please upload the file first from the WordPress admin dashboard.', 'lead-magnet-locker' ) );
 		}
@@ -80,7 +81,7 @@ final class ShortcodeController {
 			array(
 				'atts'       => $atts,
 				// The form carries an opaque token, never the file name.
-				'file_token' => $this->storage->token( basename( $file_path ) ),
+				'file_token' => $this->files->token( basename( $file_path ) ),
 			)
 		);
 		$html     = (string) ob_get_clean();
@@ -114,7 +115,7 @@ final class ShortcodeController {
 			'lead_magnet_ajax',
 			array(
 				'ajax_url' => admin_url( 'admin-ajax.php' ),
-				'nonce'    => wp_create_nonce( SubmissionHandler::NONCE ),
+				'nonce'    => wp_create_nonce( SubmissionEndpoint::NONCE ),
 				'i18n'     => array(
 					'processing' => __( 'Processing...', 'lead-magnet-locker' ),
 					'download'   => __( 'Click here to download', 'lead-magnet-locker' ),

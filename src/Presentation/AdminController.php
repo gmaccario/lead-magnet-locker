@@ -3,23 +3,20 @@
  * Admin pages: dashboard, settings and download history.
  *
  * @package LeadMagnetLocker
- * @subpackage Application
  * @since 1.3.0
  */
 
 declare(strict_types=1);
 
-namespace LeadMagnet\Locker\Application;
+namespace LeadMagnet\Locker\Presentation;
 
+use LeadMagnet\Locker\Application\ListFiles;
+use LeadMagnet\Locker\Application\Port\Clock;
+use LeadMagnet\Locker\Application\Port\DownloadRecords;
+use LeadMagnet\Locker\Application\Port\FileStorage;
+use LeadMagnet\Locker\Application\Port\SettingsStore;
+use LeadMagnet\Locker\Application\SaveSchedule;
 use LeadMagnet\Locker\Domain\ByteSize;
-use LeadMagnet\Locker\Domain\Schedule;
-use LeadMagnet\Locker\Infrastructure\DownloadRepository;
-use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerDownloader;
-use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerFileUploader;
-use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerHistoryExporter;
-use LeadMagnet\Locker\Infrastructure\LeadMagnetLockerStorage;
-use LeadMagnet\Locker\Infrastructure\PluginPaths;
-use LeadMagnet\Locker\Infrastructure\SettingsRepository;
 
 /**
  * Admin menu, pages, assets and notices.
@@ -48,21 +45,23 @@ final class AdminController {
 	/**
 	 * Constructor.
 	 *
-	 * @param LeadMagnetLockerStorage         $storage    Protected file storage.
-	 * @param DownloadRepository              $downloads  Download records.
-	 * @param SettingsRepository              $settings   Settings.
-	 * @param LeadMagnetLockerFileUploader    $uploader   Upload and delete.
-	 * @param LeadMagnetLockerDownloader      $downloader Admin download links.
-	 * @param LeadMagnetLockerHistoryExporter $exporter   CSV export links.
-	 * @param PluginPaths                     $paths      Plugin files.
+	 * @param FileActions     $file_actions  Upload and delete.
+	 * @param ListFiles       $list_files    Use case.
+	 * @param SaveSchedule    $save_schedule Use case.
+	 * @param DownloadRecords $records       Download records (read only).
+	 * @param SettingsStore   $settings      Settings (read only).
+	 * @param FileStorage     $files         File storage (read only).
+	 * @param Clock           $clock         Clock.
+	 * @param PluginPaths     $paths         Plugin files.
 	 */
 	public function __construct(
-		private LeadMagnetLockerStorage $storage,
-		private DownloadRepository $downloads,
-		private SettingsRepository $settings,
-		private LeadMagnetLockerFileUploader $uploader,
-		private LeadMagnetLockerDownloader $downloader,
-		private LeadMagnetLockerHistoryExporter $exporter,
+		private FileActions $file_actions,
+		private ListFiles $list_files,
+		private SaveSchedule $save_schedule,
+		private DownloadRecords $records,
+		private SettingsStore $settings,
+		private FileStorage $files,
+		private Clock $clock,
 		private PluginPaths $paths
 	) {}
 
@@ -88,40 +87,32 @@ final class AdminController {
 		// check_admin_referer() stops the request when the nonce is invalid.
 		if ( isset( $_POST['upload_file'], $_FILES['lead_magnet_file'] ) ) {
 			check_admin_referer( 'lead_magnet_upload', 'upload_nonce' );
-			$upload_message = $this->uploader->handle_file_upload()->message;
+			$upload_message = $this->file_actions->upload_from_request()->message;
 		}
 
 		if ( isset( $_POST['delete_file'], $_POST['file_to_delete'] ) ) {
 			check_admin_referer( 'lead_magnet_delete', 'delete_nonce' );
-			$upload_message = $this->uploader->handle_file_deletion( sanitize_file_name( wp_unslash( $_POST['file_to_delete'] ) ) )->message;
-		}
-
-		// Protect files added to the legacy folder since the last migration (e.g. via FTP).
-		if ( $this->storage->unprotected_files() ) {
-			$this->storage->migrate();
+			$upload_message = $this->file_actions->delete( sanitize_file_name( wp_unslash( $_POST['file_to_delete'] ) ) )->message;
 		}
 
 		$files = array();
-		foreach ( $this->storage->list_files() as $name ) {
-			$file_path = $this->storage->path( $name );
-			if ( null !== $file_path ) {
-				$files[] = array(
-					'name'     => $name,
-					'size'     => ByteSize::format( (int) filesize( $file_path ) ),
-					'modified' => gmdate( 'Y-m-d H:i:s', (int) filemtime( $file_path ) ),
-				);
-			}
+		foreach ( $this->list_files->execute() as $file ) {
+			$files[] = array(
+				'name'     => $file->name,
+				'size'     => ByteSize::format( $file->size ),
+				'modified' => gmdate( 'Y-m-d H:i:s', $file->modified ),
+			);
 		}
 
-		$statistics = $this->downloads->statistics();
+		$statistics = $this->records->statistics();
 
 		$this->render(
 			'admin/admin-page.php',
 			array(
 				'upload_message'      => $upload_message,
-				'total_downloads'     => $statistics['total'],
-				'unique_emails'       => $statistics['unique_emails'],
-				'completed_downloads' => $statistics['completed'],
+				'total_downloads'     => $statistics->total,
+				'unique_emails'       => $statistics->unique_emails,
+				'completed_downloads' => $statistics->completed,
 				'max_upload_size'     => ByteSize::format( (int) wp_max_upload_size() ),
 				'files'               => $files,
 			)
@@ -142,13 +133,19 @@ final class AdminController {
 				wp_die( esc_html__( 'Insufficient permissions.', 'lead-magnet-locker' ) );
 			}
 
-			$values = array( 'enable_date_trigger' => isset( $_POST['enable_date_trigger'] ) ? '1' : '0' );
+			$values = array();
 			foreach ( array( 'start_date', 'end_date', 'start_time', 'end_time', 'timezone' ) as $key ) {
 				$values[ $key ] = isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
 			}
-			$values['timezone'] = Schedule::valid_timezone( $values['timezone'] );
 
-			$this->settings->save_schedule( $values );
+			$this->save_schedule->execute(
+				isset( $_POST['enable_date_trigger'] ),
+				$values['start_date'],
+				$values['end_date'],
+				$values['start_time'],
+				$values['end_time'],
+				$values['timezone']
+			);
 
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved successfully!', 'lead-magnet-locker' ) . '</p></div>';
 		}
@@ -158,7 +155,7 @@ final class AdminController {
 		$this->render(
 			'admin/settings-page.php',
 			array(
-				'is_visible'          => $schedule->is_open( current_time( 'mysql' ) ),
+				'is_visible'          => $schedule->is_open( $this->clock->now() ),
 				'enable_date_trigger' => $schedule->enabled ? '1' : '0',
 				'start_date'          => $schedule->start_date,
 				'end_date'            => $schedule->end_date,
@@ -183,12 +180,12 @@ final class AdminController {
 			$search = sanitize_text_field( wp_unslash( $_GET['s'] ) );
 		}
 
-		$records     = $this->downloads->search( $search, self::PER_PAGE, ( $page - 1 ) * self::PER_PAGE );
-		$total_items = $this->downloads->count( $search );
+		$records     = $this->records->search( $search, self::PER_PAGE, ( $page - 1 ) * self::PER_PAGE );
+		$total_items = $this->records->count( $search );
 
 		$download_urls = array();
 		foreach ( $records as $record ) {
-			$download_urls[ $record->id ] = $this->downloader->get_admin_download_url( $record->id );
+			$download_urls[ $record->id ] = DownloadEndpoint::admin_url( $record->id );
 		}
 
 		// Pagination keeps the search (and its nonce).
@@ -208,7 +205,7 @@ final class AdminController {
 			array(
 				'records'       => $records,
 				'download_urls' => $download_urls,
-				'export_url'    => $this->exporter->get_export_url( $search ),
+				'export_url'    => HistoryExport::url( $search ),
 				'search'        => $search,
 				'page'          => $page,
 				'total_items'   => $total_items,
@@ -238,7 +235,7 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'Invalid record ID' ) );
 		}
 
-		if ( ! $this->downloads->delete( $record_id ) ) {
+		if ( ! $this->records->delete( $record_id ) ) {
 			wp_send_json_error( array( 'message' => 'Database error' ) );
 		}
 
@@ -285,7 +282,7 @@ final class AdminController {
 			return;
 		}
 
-		$unprotected = $this->storage->unprotected_files();
+		$unprotected = $this->files->unprotected_files();
 		if ( empty( $unprotected ) ) {
 			return;
 		}

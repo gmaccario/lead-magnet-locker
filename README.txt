@@ -218,7 +218,7 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 * Fix: the form shows an error message instead of failing silently when the security check fails (e.g. an outdated cached page)
 * The Settings page and this readme now state that the schedule applies to all forms, and that start and end times apply to the start and end dates (not daily)
 * Front-end texts are translatable
-* Code: rewritten internals (repositories, controllers, typed records) with end-to-end, unit and static-analysis checks; no change to shortcodes, settings, hooks or stored data
+* Code: rewritten internals following Clean Architecture (domain, use cases, adapters), checked by end-to-end, unit, architecture and static-analysis tests; no change to shortcodes, settings, hooks or stored data
 
 = 1.2.0 =
 * Added CSV export of the download history (respects the current search)

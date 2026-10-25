@@ -7,6 +7,7 @@ parameters:
     paths:
         - lead-magnet-locker.php
         - functions.php
+        - compat.php
         - src
     bootstrapFiles:
         - tests/phpstan-bootstrap.php

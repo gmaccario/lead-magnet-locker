@@ -8,10 +8,10 @@
 
 declare(strict_types=1);
 
-namespace LeadMagnet\Locker\Domain;
+namespace LeadMagnet\Locker\Presentation;
 
 /**
- * Success or failure with a plain-text message (escaped by whoever displays it).
+ * Success or failure with a plain-text message for the admin UI (escaped when displayed).
  */
 final class Result {
 

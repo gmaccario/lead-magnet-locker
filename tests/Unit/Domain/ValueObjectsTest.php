@@ -1,6 +1,6 @@
 <?php
 /**
- * Small value objects: ByteSize, Result, DownloadRecord.
+ * Small value objects: ByteSize, DownloadKey, DownloadRecord, Result.
  *
  * @package LeadMagnetLocker
  */
@@ -11,7 +11,8 @@ namespace LeadMagnet\Locker\Tests\Unit\Domain;
 
 use LeadMagnet\Locker\Domain\ByteSize;
 use LeadMagnet\Locker\Domain\DownloadRecord;
-use LeadMagnet\Locker\Domain\Result;
+use LeadMagnet\Locker\Domain\DownloadKey;
+use LeadMagnet\Locker\Presentation\Result;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -26,6 +27,15 @@ final class ValueObjectsTest extends TestCase {
 		$this->assertSame( '1.50 KB', ByteSize::format( 1536 ) );
 		$this->assertSame( '10.00 MB', ByteSize::format( 10 * 1024 * 1024 ) );
 		$this->assertSame( '100.00 MB', ByteSize::format( 104857600 ) );
+	}
+
+	public function test_download_keys_are_32_random_letters_and_digits(): void {
+		$keys = array_map( static fn(): string => DownloadKey::generate(), range( 1, 50 ) );
+
+		foreach ( $keys as $key ) {
+			$this->assertMatchesRegularExpression( '/^[A-Za-z0-9]{32}$/', $key );
+		}
+		$this->assertCount( 50, array_unique( $keys ) );
 	}
 
 	public function test_results_keep_the_ajax_shape(): void {

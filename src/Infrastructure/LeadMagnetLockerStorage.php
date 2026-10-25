@@ -15,13 +15,19 @@ declare(strict_types=1);
 
 namespace LeadMagnet\Locker\Infrastructure;
 
+use LeadMagnet\Locker\Application\Outcome;
+use LeadMagnet\Locker\Application\Port\FileStorage;
+use LeadMagnet\Locker\Application\UploadedFile;
+use LeadMagnet\Locker\Domain\FileTypes;
+use LeadMagnet\Locker\Domain\StoredFile;
+
 /**
  * Storage service class.
  *
  * Resolves file paths, keeps the folders hardened, migrates files from the
  * legacy folder, and maps public form tokens to file names.
  */
-class LeadMagnetLockerStorage {
+class LeadMagnetLockerStorage implements FileStorage {
 
 	/**
 	 * Legacy (pre-1.3.0) folder name under uploads, also the parent of the private folder.
@@ -180,7 +186,7 @@ class LeadMagnetLockerStorage {
 	/**
 	 * List lead magnet file names from both folders.
 	 *
-	 * @return string[] File names, sorted.
+	 * @return list<string> File names, sorted.
 	 */
 	public function list_files(): array {
 		$names = array_merge(
@@ -191,6 +197,90 @@ class LeadMagnetLockerStorage {
 		sort( $names );
 
 		return $names;
+	}
+
+	/**
+	 * Stored files with their size and modification time, sorted by name.
+	 *
+	 * @return list<StoredFile>
+	 */
+	public function stored_files(): array {
+		$files = array();
+		foreach ( $this->list_files() as $name ) {
+			$path = $this->path( $name );
+			if ( null !== $path ) {
+				$files[] = new StoredFile( $name, (int) filesize( $path ), (int) filemtime( $path ) );
+			}
+		}
+
+		return $files;
+	}
+
+	/**
+	 * Move an upload into the folder for new files, letting WordPress validate and name it.
+	 *
+	 * @param UploadedFile $file Validated upload.
+	 * @return Outcome Success with data "name", or REJECTED with data "message" ("" when WordPress gave none).
+	 */
+	public function store( UploadedFile $file ): Outcome {
+		$this->ensure_directories();
+		$subdir = $this->upload_subdir();
+
+		// Point WordPress at the protected folder for this one upload.
+		$filter = static function ( array $dirs ) use ( $subdir ): array {
+			$dirs['path']   = $dirs['basedir'] . $subdir;
+			$dirs['url']    = $dirs['baseurl'] . $subdir; // Never exposed, kept for consistency.
+			$dirs['subdir'] = $subdir;
+			return $dirs;
+		};
+
+		$upload = array(
+			'name'     => $file->name,
+			'type'     => $file->mime_type,
+			'tmp_name' => $file->tmp_path,
+			'error'    => 0,
+			'size'     => $file->size,
+		);
+
+		add_filter( 'upload_dir', $filter );
+		try {
+			$moved = wp_handle_upload(
+				$upload,
+				array(
+					'test_form'                => false,
+					'mimes'                    => $this->allowed_mimes(),
+					'unique_filename_callback' => static function ( string $dir, string $name, string $ext ): string {
+						$sanitized = sanitize_file_name( $name );
+
+						// Do not append the extension twice.
+						return wp_unique_filename( $dir, $ext && str_ends_with( $sanitized, $ext ) ? $sanitized : $sanitized . $ext );
+					},
+				)
+			);
+		} finally {
+			remove_filter( 'upload_dir', $filter );
+		}
+
+		if ( ! empty( $moved['error'] ) ) {
+			return Outcome::failure( self::REJECTED, array( 'message' => (string) $moved['error'] ) );
+		}
+		if ( empty( $moved['file'] ) ) {
+			return Outcome::failure( self::REJECTED, array( 'message' => '' ) );
+		}
+
+		return Outcome::success( array( 'name' => wp_basename( (string) $moved['file'] ) ) );
+	}
+
+	/**
+	 * Delete a stored file.
+	 *
+	 * @param string $name File name.
+	 * @return bool
+	 */
+	public function delete( string $name ): bool {
+		$path = $this->path( $name );
+
+		return null !== $path && wp_delete_file( $path );
 	}
 
 	/**
@@ -263,7 +353,7 @@ class LeadMagnetLockerStorage {
 	 * half copied or duplicated. Files that cannot be moved stay where they are
 	 * (path() still finds them) and the move is retried a day later.
 	 *
-	 * @return string[] Names of the files that could not be moved.
+	 * @return list<string> Names of the files that could not be moved.
 	 */
 	public function migrate(): array {
 		if ( ! $this->is_private_storage_enabled() ) {
@@ -318,17 +408,30 @@ class LeadMagnetLockerStorage {
 	/**
 	 * Names of files still in the legacy (guessable) folder.
 	 *
-	 * @return string[]
+	 * @return list<string>
 	 */
 	public function unprotected_files(): array {
 		return $this->is_private_storage_enabled() ? $this->files_in( $this->base_dir() ) : array();
 	}
 
 	/**
+	 * WordPress MIME map restricted to the allowed extensions.
+	 *
+	 * @return array<string, string>
+	 */
+	private function allowed_mimes(): array {
+		return array_filter(
+			wp_get_mime_types(),
+			static fn( string $mime, string $extensions ): bool => (bool) array_intersect( explode( '|', $extensions ), FileTypes::extensions() ),
+			ARRAY_FILTER_USE_BOTH
+		);
+	}
+
+	/**
 	 * Regular files in a folder, without protection files.
 	 *
 	 * @param string $dir Absolute folder path.
-	 * @return string[]
+	 * @return list<string>
 	 */
 	private function files_in( string $dir ): array {
 		if ( ! is_dir( $dir ) ) {

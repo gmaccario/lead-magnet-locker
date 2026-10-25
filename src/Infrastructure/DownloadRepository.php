@@ -10,15 +10,17 @@ declare(strict_types=1);
 
 namespace LeadMagnet\Locker\Infrastructure;
 
+use LeadMagnet\Locker\Application\Port\DownloadRecords;
 use LeadMagnet\Locker\Domain\DownloadRecord;
+use LeadMagnet\Locker\Domain\DownloadStatistics;
 
 // Custom table: no WordPress API or cache layer applies.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 /**
- * All SQL for download records lives here.
+ * Download records in the plugin's own table (wpdb). All SQL for them lives here.
  */
-final class DownloadRepository {
+final class DownloadRepository implements DownloadRecords {
 
 	/**
 	 * Table name without the prefix.
@@ -160,15 +162,15 @@ final class DownloadRepository {
 	/**
 	 * Dashboard statistics.
 	 *
-	 * @return array{total: int, unique_emails: int, completed: int}
+	 * @return DownloadStatistics
 	 */
-	public function statistics(): array {
+	public function statistics(): DownloadStatistics {
 		$wpdb = $this->wpdb;
 
-		return array(
-			'total'         => (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $this->table ) ),
-			'unique_emails' => (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(DISTINCT email) FROM %i', $this->table ) ),
-			'completed'     => (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE downloaded_at IS NOT NULL', $this->table ) ),
+		return new DownloadStatistics(
+			(int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $this->table ) ),
+			(int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(DISTINCT email) FROM %i', $this->table ) ),
+			(int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE downloaded_at IS NOT NULL', $this->table ) )
 		);
 	}
 

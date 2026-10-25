@@ -20,7 +20,7 @@ declare(strict_types=1);
 
 namespace LeadMagnetLocker;
 
-use LeadMagnet\Locker\Application\LeadMagnetLocker;
+use LeadMagnet\Locker\Plugin;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -39,7 +39,7 @@ if ( ! file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 require_once __DIR__ . '/vendor/autoload.php';
 
 // Test if a class can be found.
-if ( ! class_exists( '\LeadMagnet\Locker\Infrastructure\LeadMagnetLockerPluginBootstrap' ) ) {
+if ( ! class_exists( Plugin::class ) ) {
 	// Only log in debug mode, not in production.
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 		error_log( 'LeadMagnet - Class NOT found by autoloader' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- WP_DEBUG only.
@@ -60,8 +60,9 @@ if ( ! defined( 'LML_PLUGIN_URL' ) ) {
 	define( 'LML_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 }
 
-// Public helper functions for themes and other plugins.
+// Public helper functions for themes and other plugins, and earlier class names.
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/compat.php';
 
 // Initialize the plugin.
-( new LeadMagnetLocker( $GLOBALS['wpdb'], __FILE__, LML_PLUGIN_VERSION ) )->register();
+( new Plugin( $GLOBALS['wpdb'], __FILE__, LML_PLUGIN_VERSION ) )->register();
