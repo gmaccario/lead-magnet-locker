@@ -5,3 +5,5 @@
 /tests/**       export-ignore
 /phpunit.xml.dist export-ignore
 /phpstan.neon.dist export-ignore
+/README.md      export-ignore
+/SECURITY.md    export-ignore

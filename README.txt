@@ -19,6 +19,18 @@ Transform your WordPress site into a powerful lead generation machine. Protect y
 
 Unlike other complex lead generation tools, Lead Magnet Locker focuses on doing one thing exceptionally well: turning visitors into subscribers through irresistible content offers.
 
+### What's New in 1.3
+
+* **Your files are safe on every server.** Files now live in a private, randomly named folder, so nobody can download them by guessing a URL, on Apache, Nginx, Caddy or IIS.
+* **File names stay hidden.** The form on your page no longer shows which file it offers.
+* **Export your leads.** Download your whole list, or just your search results, as a CSV file for Excel, Google Sheets or your email marketing tool.
+* **Several forms on one page.** Offer a checklist and a guide side by side: every form works.
+* **A cleaner admin.** Statistics at the top, a drag-and-drop upload area, a searchable timezone list and a clear "forms visible / hidden" status.
+* **No technical errors for visitors.** If a shortcode points to a missing file, only administrators see the message.
+* **Ready for WordPress 7.1** and translatable.
+
+Updating is automatic: your existing files are moved to the private folder, and your shortcodes, download links and statistics keep working.
+
 ### Why Choose Lead Magnet Locker?
 
 #### Security-First Approach
@@ -48,7 +60,7 @@ Clean, responsive forms that match your site's design and convert visitors into 
 
 ### Core Functionality
 * **Secure File Protection**: Files stored in a private, randomly named folder with server-level access rules; protected on Apache, Nginx, and other servers
-* **Email Validation**: Built-in verification ensures you collect valid email addresses
+* **Email Validation**: Rejects malformed email addresses before a download link is created
 * **Unique Download Links**: Every download gets a secure, trackable URL
 * **Responsive Design**: Forms look great on desktop, tablet, and mobile devices
 * **AJAX-Powered**: Smooth user experience without page reloads
@@ -56,7 +68,7 @@ Clean, responsive forms that match your site's design and convert visitors into 
 ### Advanced Scheduling
 * **Date Range Control**: Set start and end dates for your campaigns
 * **Start and End Times**: Choose the exact time on the start date and on the end date
-* **Timezone Support**: Respects your WordPress timezone settings
+* **Timezone Support**: Pick the timezone for your schedule from a searchable list (UTC by default)
 * **Real-Time Status**: See instantly if your forms are currently active
 * **Site-Wide Schedule**: One schedule applies to all your forms at once
 
@@ -69,7 +81,7 @@ Clean, responsive forms that match your site's design and convert visitors into 
 
 ### Administrative Power
 * **Clean Dashboard**: Overview of all your lead magnets and performance
-* **Bulk Management**: Handle multiple campaigns efficiently
+* **Multiple Forms**: Use as many forms as you like, even several on the same page
 * **File Management**: Easy upload and organization system
 * **User-Friendly Interface**: Intuitive controls that make sense
 
@@ -123,11 +135,11 @@ Make it your own with these parameters:
 * Audio (MP3)
 * Video (MP4)
 
-**Upload Process: **
+**Upload Process:**
 1. Access your WordPress admin dashboard.
-2. Navigate to **Lead Magnet Locker → Settings**.
-3. Upload your files directly via the file manager.
-4. Reference the filename in your shortcode.
+2. Navigate to **Lead Magnet**.
+3. Upload your file in the **Upload New File** box.
+4. Copy its shortcode from the **Manage Files** list and paste it into a page or post.
 
 ### Campaign Scheduling
 
@@ -152,15 +164,13 @@ The schedule is global: it applies to every lead magnet form on your site, whate
 **Track Everything:**
 * Total email submissions
 * Unique subscriber count
-* Download completion rates
-* Individual user activity
-* Time-based performance data
+* Download completion (conversion) rate
+* Who requested which file, and when they downloaded it
 
 **Export & Analysis:**
 * Export the download history to CSV with one click from the History page
 * Search records by email or filename, then export only the matching results
-* Monitor conversion trends
-* Identify best-performing content
+* Compare files by searching the history for each file name
 
 == Frequently Asked Questions ==
 
@@ -184,13 +194,19 @@ File size limits are determined by your hosting provider’s PHP settings. The p
 This plugin is designed for free lead magnets. For paid downloads, consider integrating with an e-commerce solution.
 
 = Will this slow down my website? =
-No. The plugin uses efficient database queries and only loads resources when needed. Forms use AJAX for a smooth experience.
+No. The plugin adds one small script and one small stylesheet, and its database queries are light. Forms submit with AJAX, without reloading the page.
 
 = Can I integrate with email marketing services? =
 The plugin collects email addresses in your WordPress database. You can export this data to import into your preferred email marketing platform.
 
 = What happens if someone shares their download link? =
-Each download link is unique and tracked. You’ll see in your analytics if links are being used by multiple people.
+Each link is unique to one submission and stops working within 24 hours. The History page shows when the file behind each submission was downloaded.
+
+= Can I show more than one form on a page? =
+Yes, since 1.3.0. Add as many [lead_magnet] shortcodes as you like; each form offers its own file. Note that the schedule (Settings) is global and applies to all forms.
+
+= Do I need to change anything after updating to 1.3.0? =
+No. Your files are moved to the new private folder automatically, and your shortcodes, download links and statistics keep working. If your theme or custom code checks for files in wp-content/uploads/lead-magnet-files/ directly, use the lead_magnet_locker_file_exists() function instead (see Developer Functions).
 
 = Do I need coding knowledge? =
 Not at all. Everything works through simple shortcodes and an intuitive admin interface.
@@ -204,25 +220,31 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 == Changelog ==
 
 = 1.3.0 =
-* Security: files are now stored in a private, randomly named folder, so they cannot be downloaded by direct URL even on servers that ignore .htaccess (Nginx, Caddy, IIS)
-* Security: the public form no longer reveals the file name (it sends an opaque token)
-* Security: the protected folders use Apache 2.4 rules (with 2.2 fallback) and empty index files to block directory listings
-* Existing files are moved automatically on update; shortcodes, download links and statistics keep working unchanged
-* Admins see a notice if a file cannot be moved (e.g. folder permissions); the move is retried automatically
-* Shortcode error messages (e.g. file not found) are shown to administrators only; visitors see nothing instead of a technical message
-* New developer function lead_magnet_locker_file_exists() for themes that need to know whether a file is available (do not check paths under uploads/ directly)
-* Security: the old "file" form field (sent by pages cached before the update) is accepted for 30 days after the upgrade, then only the opaque token is
-* Security: downloads send X-Content-Type-Options: nosniff and an encoded file name; form messages are inserted as text
-* Fix: several [lead_magnet] boxes on the same page now all render (only the first one did)
-* Fix: paging through History search results keeps the search
-* Fix: the form shows an error message instead of failing silently when the security check fails (e.g. an outdated cached page)
-* The Settings page and this readme now state that the schedule applies to all forms, and that start and end times apply to the start and end dates (not daily)
+**Safer files**
+* Files are stored in a private, randomly named folder: they cannot be downloaded by direct URL, even on servers that ignore .htaccess (Nginx, Caddy, IIS)
+* The public form no longer reveals the file name (it sends an opaque token)
+* Existing files move to the private folder automatically; shortcodes, download links and statistics keep working
+* If a file cannot be moved (e.g. folder permissions), administrators see a notice and the move is retried automatically
+* Stronger folder rules (Apache 2.4 with 2.2 fallback) and empty index files block directory listings
+* Downloads send X-Content-Type-Options: nosniff and a properly encoded file name; form messages are always shown as plain text
+* Pages cached before the update keep working for 30 days, then only the new secure form data is accepted
+
+**New and improved**
+* Several [lead_magnet] forms on the same page now all work (before, only the first one appeared)
+* Shortcode errors (e.g. file not found) are shown to administrators only; visitors no longer see technical messages
+* The form shows a clear error instead of doing nothing when its security check fails (e.g. an outdated cached page)
+* Paging through History search results keeps the search
+* Clearer Settings page: it explains that the schedule applies to all forms, and that start and end times apply to the start and end dates
 * Front-end texts are translatable
-* Code: rewritten internals following Clean Architecture (domain, use cases, adapters), checked by end-to-end, unit, architecture and static-analysis tests; no change to shortcodes, settings, hooks or stored data
+* New developer function lead_magnet_locker_file_exists() for themes that need to know whether a file is available
+
+**Under the hood**
+* Internals rewritten following Clean Architecture and covered by automated end-to-end, unit, architecture and static-analysis tests, for fewer bugs and safer future updates; no change to shortcodes, settings, hooks or stored data
 
 = 1.2.0 =
 * Added CSV export of the download history (respects the current search)
-* Admin dashboard cards now use the full page width
+* Redesigned admin: statistics at the top of the dashboard, upload and instructions side by side, full-width cards, a drag-and-drop upload area
+* Redesigned Settings page with a clear "forms visible / hidden" status and a searchable timezone list (UTC by default)
 * Tested with WordPress 7.1
 * Security: the timezone setting is validated (an invalid value can no longer break pages showing the form)
 * Security: shortcode file paths are checked to stay inside the protected folder
@@ -231,10 +253,10 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 * Fixed: the form button no longer stays on "Processing..." after an error
 
 = 1.1.1 =
-* Make the plugin complaint with the WordPress coding standard
+* Made the plugin compliant with the WordPress coding standards
 * Fix issues after first volunteer's review
 
-= 1.1.0=
+= 1.1.0 =
 * Added a comprehensive admin dashboard
 * Implemented a date/time scheduling system
 * Enhanced download tracking and analytics
@@ -252,7 +274,7 @@ Not at all. Everything works through simple shortcodes and an intuitive admin in
 == Upgrade Notice ==
 
 = 1.3.0 =
-Security update for Nginx and similar servers: files move to a private folder automatically, shortcodes keep working. Themes that check uploads/lead-magnet-files/ directly should use lead_magnet_locker_file_exists(). To keep downgrades to 1.2.x possible, see LML_DISABLE_STORAGE_MIGRATION.
+Recommended: protects your files on every server (incl. Nginx), hides file names, adds CSV export and several forms per page. Files move automatically and shortcodes keep working. Themes checking uploads/lead-magnet-files/ should use lead_magnet_locker_file_exists().
 
 = 1.2.0 =
 Adds CSV export of the download history and confirms compatibility with WordPress 7.1.
